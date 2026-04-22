@@ -21,7 +21,7 @@ const router = createRouter({
       component: HomeView,
     },
     {
-      path: '/thoughts',
+      path: '/thoughts/:groupId?/:noteId?',
       name: 'thoughts',
       component: ThoughtsView,
     },
