@@ -45,6 +45,8 @@ const handleSubmit = () => {
   align-items: center;
   justify-content: center;
   padding: 24px;
+  box-sizing: border-box;
+  overflow: hidden;
   background: linear-gradient(135deg, #172554 0%, #1d4ed8 50%, #60a5fa 100%);
 }
 
