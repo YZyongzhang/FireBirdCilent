@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 interface ThoughtGroup {
@@ -15,9 +15,18 @@ interface ThoughtNote {
   updatedAt: string
 }
 
+interface ContextMenuState {
+  visible: boolean
+  x: number
+  y: number
+  type: 'group-area' | 'note-list' | 'note-item'
+  noteId?: string
+}
+
 const route = useRoute()
 const router = useRouter()
 const storageKey = 'firebird-thoughts'
+const previewModes = ['split', 'edit', 'preview'] as const
 
 const createId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 
@@ -38,9 +47,13 @@ const defaultNotes: ThoughtNote[] = [
 
 const groups = ref<ThoughtGroup[]>(defaultGroups)
 const notes = ref<ThoughtNote[]>(defaultNotes)
-const draftGroupName = ref('')
-const draftNoteTitle = ref('')
-const previewMode = ref<'split' | 'edit' | 'preview'>('split')
+const previewMode = ref<(typeof previewModes)[number]>('preview')
+const contextMenu = ref<ContextMenuState>({
+  visible: false,
+  x: 0,
+  y: 0,
+  type: 'note-list',
+})
 
 const loadState = () => {
   const stored = localStorage.getItem(storageKey)
@@ -119,6 +132,10 @@ watch(
   { deep: true, immediate: true },
 )
 
+const closeContextMenu = () => {
+  contextMenu.value.visible = false
+}
+
 const selectGroup = (groupId: string) => {
   const firstNote = notes.value.find((note) => note.groupId === groupId)
   syncRoute(groupId, firstNote?.id)
@@ -132,8 +149,22 @@ const selectNote = (noteId: string) => {
   syncRoute(currentGroupId.value, noteId)
 }
 
+const ensureFallbackGroup = () => {
+  if (groups.value.length && groups.value[0]) {
+    return groups.value[0].id
+  }
+
+  const fallbackGroup = {
+    id: createId(),
+    name: '默认分组',
+  }
+
+  groups.value = [fallbackGroup]
+  return fallbackGroup.id
+}
+
 const createGroup = () => {
-  const name = draftGroupName.value.trim()
+  const name = window.prompt('请输入分组名称')?.trim()
 
   if (!name) {
     return
@@ -145,27 +176,67 @@ const createGroup = () => {
   }
 
   groups.value = [newGroup, ...groups.value]
-  draftGroupName.value = ''
   syncRoute(newGroup.id)
 }
 
 const createNote = () => {
-  if (!currentGroupId.value) {
-    return
-  }
-
-  const title = draftNoteTitle.value.trim() || '未命名文档'
+  const groupId = currentGroupId.value || ensureFallbackGroup()
+  const title = window.prompt('请输入文档标题')?.trim() || '未命名文档'
   const newNote = {
     id: createId(),
-    groupId: currentGroupId.value,
+    groupId,
     title,
     content: '# 新文档\n\n开始记录你的想法。',
     updatedAt: new Date().toISOString(),
   }
 
   notes.value = [newNote, ...notes.value]
-  draftNoteTitle.value = ''
-  syncRoute(currentGroupId.value, newNote.id)
+  syncRoute(groupId, newNote.id)
+}
+
+const deleteGroup = () => {
+  if (!currentGroup.value) {
+    return
+  }
+
+  const confirmed = window.confirm(`确认删除分组“${currentGroup.value.name}”及其全部文档吗？`)
+
+  if (!confirmed) {
+    return
+  }
+
+  const nextGroups = groups.value.filter((group) => group.id !== currentGroup.value?.id)
+  const nextNotes = notes.value.filter((note) => note.groupId !== currentGroup.value?.id)
+
+  groups.value = nextGroups
+  notes.value = nextNotes
+
+  const fallbackGroupId = ensureFallbackGroup()
+  const fallbackNoteId = notes.value.find((note) => note.groupId === fallbackGroupId)?.id
+  syncRoute(fallbackGroupId, fallbackNoteId)
+}
+
+const deleteNote = (noteId?: string) => {
+  if (!noteId) {
+    return
+  }
+
+  const targetNote = notes.value.find((note) => note.id === noteId)
+
+  if (!targetNote) {
+    return
+  }
+
+  const confirmed = window.confirm(`确认删除文档“${targetNote.title}”吗？`)
+
+  if (!confirmed) {
+    return
+  }
+
+  notes.value = notes.value.filter((note) => note.id !== noteId)
+
+  const fallbackNoteId = notes.value.find((note) => note.groupId === currentGroupId.value)?.id
+  syncRoute(currentGroupId.value || ensureFallbackGroup(), fallbackNoteId)
 }
 
 const updateCurrentNote = (patch: Partial<Pick<ThoughtNote, 'title' | 'content'>>) => {
@@ -182,6 +253,38 @@ const updateCurrentNote = (patch: Partial<Pick<ThoughtNote, 'title' | 'content'>
         }
       : note,
   )
+}
+
+const openContextMenu = (event: MouseEvent, type: ContextMenuState['type'], noteId?: string) => {
+  event.preventDefault()
+  contextMenu.value = {
+    visible: true,
+    x: event.clientX,
+    y: event.clientY,
+    type,
+    noteId,
+  }
+}
+
+const handleContextAction = (action: 'create-group' | 'delete-group' | 'create-note' | 'delete-note') => {
+  closeContextMenu()
+
+  if (action === 'create-group') {
+    createGroup()
+    return
+  }
+
+  if (action === 'delete-group') {
+    deleteGroup()
+    return
+  }
+
+  if (action === 'create-note') {
+    createNote()
+    return
+  }
+
+  deleteNote(contextMenu.value.noteId)
 }
 
 const escapeHtml = (value: string) => {
@@ -287,66 +390,81 @@ const renderMarkdown = (value: string) => {
 
 const previewHtml = computed(() => renderMarkdown(currentNote.value?.content ?? ''))
 const formatTime = (value: string) => new Date(value).toLocaleString()
+const contextActions = computed(() => {
+  if (contextMenu.value.type === 'group-area') {
+    return [
+      { label: '创建分组', action: 'create-group' as const },
+      { label: '删除当前分组', action: 'delete-group' as const },
+    ]
+  }
+
+  if (contextMenu.value.type === 'note-item') {
+    return [
+      { label: '创建文档', action: 'create-note' as const },
+      { label: '删除当前文档', action: 'delete-note' as const },
+    ]
+  }
+
+  return [{ label: '创建文档', action: 'create-note' as const }]
+})
+
+onMounted(() => {
+  window.addEventListener('click', closeContextMenu)
+  window.addEventListener('scroll', closeContextMenu, true)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('click', closeContextMenu)
+  window.removeEventListener('scroll', closeContextMenu, true)
+})
 </script>
 
 <template>
   <main class="thoughts-page">
     <section class="thoughts-shell">
-      <aside class="panel group-panel">
+      <aside class="panel sidebar-panel">
         <div class="panel-header">
           <div>
             <p class="panel-badge">分组</p>
-            <h2>思考分组</h2>
+            <h2>个人思考记录</h2>
           </div>
         </div>
 
-        <div class="panel-form">
-          <input v-model="draftGroupName" type="text" placeholder="输入分组名称" @keyup.enter="createGroup" />
-          <button type="button" @click="createGroup">新建分组</button>
+        <div class="group-select-area" @contextmenu="openContextMenu($event, 'group-area')">
+          <label class="group-select-label" for="group-select">当前分组</label>
+          <select id="group-select" :value="currentGroupId" @change="selectGroup(($event.target as HTMLSelectElement).value)">
+            <option v-for="group in groups" :key="group.id" :value="group.id">
+              {{ group.name }}
+            </option>
+          </select>
+          <p class="context-tip">右键此区域可创建或删除分组</p>
         </div>
 
-        <div class="group-list">
-          <button
-            v-for="group in groups"
-            :key="group.id"
-            type="button"
-            class="group-item"
-            :class="{ active: group.id === currentGroupId }"
-            @click="selectGroup(group.id)"
-          >
-            {{ group.name }}
-          </button>
+        <div class="note-list-shell" @contextmenu="openContextMenu($event, 'note-list')">
+          <div class="list-header">
+            <div>
+              <p class="panel-badge">文档</p>
+              <h3>{{ currentGroup?.name || '未选择分组' }}</h3>
+            </div>
+          </div>
+
+          <div class="note-list">
+            <button
+              v-for="note in groupNotes"
+              :key="note.id"
+              type="button"
+              class="note-item"
+              :class="{ active: note.id === currentNoteId }"
+              @click="selectNote(note.id)"
+              @contextmenu.stop="openContextMenu($event, 'note-item', note.id)"
+            >
+              <strong>{{ note.title }}</strong>
+              <span>{{ formatTime(note.updatedAt) }}</span>
+            </button>
+            <p v-if="!groupNotes.length" class="empty-text">当前分组还没有文档，右键空白区域即可创建。</p>
+          </div>
         </div>
       </aside>
-
-      <section class="panel note-panel">
-        <div class="panel-header">
-          <div>
-            <p class="panel-badge">文档</p>
-            <h2>{{ currentGroup?.name || '未选择分组' }}</h2>
-          </div>
-        </div>
-
-        <div class="panel-form">
-          <input v-model="draftNoteTitle" type="text" placeholder="输入文档标题" @keyup.enter="createNote" />
-          <button type="button" @click="createNote">新建文档</button>
-        </div>
-
-        <div class="note-list">
-          <button
-            v-for="note in groupNotes"
-            :key="note.id"
-            type="button"
-            class="note-item"
-            :class="{ active: note.id === currentNoteId }"
-            @click="selectNote(note.id)"
-          >
-            <strong>{{ note.title }}</strong>
-            <span>{{ formatTime(note.updatedAt) }}</span>
-          </button>
-          <p v-if="!groupNotes.length" class="empty-text">当前分组还没有文档，请先创建一篇。</p>
-        </div>
-      </section>
 
       <section class="panel editor-panel">
         <div class="panel-header editor-header">
@@ -357,12 +475,12 @@ const formatTime = (value: string) => new Date(value).toLocaleString()
 
           <div class="preview-switcher">
             <button
-              v-for="mode in ['split', 'edit', 'preview']"
+              v-for="mode in previewModes"
               :key="mode"
               type="button"
               class="mode-button"
               :class="{ active: previewMode === mode }"
-              @click="previewMode = mode as 'split' | 'edit' | 'preview'"
+              @click="previewMode = mode"
             >
               {{ mode }}
             </button>
@@ -392,10 +510,29 @@ const formatTime = (value: string) => new Date(value).toLocaleString()
         </template>
 
         <div v-else class="empty-editor">
-          <p>请先在左侧创建分组，再新建文档开始记录。</p>
+          <p>请先在左侧选择分组并创建文档。</p>
         </div>
       </section>
     </section>
+
+    <div
+      v-if="contextMenu.visible"
+      class="context-menu"
+      :style="{
+        left: `${contextMenu.x}px`,
+        top: `${contextMenu.y}px`,
+      }"
+    >
+      <button
+        v-for="item in contextActions"
+        :key="item.action"
+        type="button"
+        class="context-menu-item"
+        @click.stop="handleContextAction(item.action)"
+      >
+        {{ item.label }}
+      </button>
+    </div>
   </main>
 </template>
 
@@ -412,7 +549,7 @@ const formatTime = (value: string) => new Date(value).toLocaleString()
 
 .thoughts-shell {
   display: grid;
-  grid-template-columns: 260px 320px minmax(0, 1fr);
+  grid-template-columns: 360px minmax(0, 1fr);
   gap: 16px;
   min-height: calc(100vh - 32px);
 }
@@ -425,6 +562,16 @@ const formatTime = (value: string) => new Date(value).toLocaleString()
   background: rgba(255, 255, 255, 0.96);
   box-shadow: 0 24px 80px rgba(15, 23, 42, 0.28);
   box-sizing: border-box;
+}
+
+.sidebar-panel,
+.editor-panel {
+  backdrop-filter: blur(8px);
+}
+
+.editor-panel {
+  display: flex;
+  flex-direction: column;
 }
 
 .panel-header {
@@ -444,20 +591,51 @@ const formatTime = (value: string) => new Date(value).toLocaleString()
   text-transform: uppercase;
 }
 
-.panel-header h2 {
+.panel-header h2,
+.list-header h3 {
   margin: 0;
   color: #0f172a;
+}
+
+.panel-header h2 {
   font-size: 24px;
 }
 
-.panel-form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-bottom: 20px;
+.list-header h3 {
+  font-size: 20px;
 }
 
-.panel-form input,
+.group-select-area,
+.note-list-shell {
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(239, 246, 255, 0.95) 0%, rgba(219, 234, 254, 0.85) 100%);
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.08);
+}
+
+.group-select-area {
+  padding: 18px;
+  margin-bottom: 16px;
+}
+
+.group-select-label,
+.context-tip {
+  display: block;
+}
+
+.group-select-label {
+  margin-bottom: 8px;
+  color: #1e3a8a;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.context-tip {
+  margin-top: 10px;
+  color: #475569;
+  font-size: 12px;
+}
+
+.group-select-area select,
 .note-title-input,
 .editor-textarea {
   width: 100%;
@@ -470,89 +648,65 @@ const formatTime = (value: string) => new Date(value).toLocaleString()
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-.panel-form input,
+.group-select-area select,
 .note-title-input {
   height: 44px;
   padding: 0 14px;
+  background: rgba(255, 255, 255, 0.92);
 }
 
-.panel-form input:focus,
+.group-select-area select:focus,
 .note-title-input:focus,
 .editor-textarea:focus {
   border-color: #2563eb;
   box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.15);
 }
 
-.panel-form button,
-.mode-button,
-.group-item,
-.note-item {
-  border: none;
-  border-radius: 12px;
-}
-
-.panel-form button,
-.mode-button {
-  height: 42px;
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-  color: #fff;
-  font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
-  box-shadow: 0 12px 24px rgba(37, 99, 235, 0.2);
-}
-
-.panel-form button:hover,
-.mode-button:hover {
-  box-shadow: 0 16px 30px rgba(37, 99, 235, 0.28);
-}
-
-.note-panel,
-.editor-panel {
-  backdrop-filter: blur(8px);
-}
-
-.editor-panel {
+.note-list-shell {
   display: flex;
   flex-direction: column;
+  min-height: calc(100vh - 230px);
+  padding: 18px;
 }
 
-.group-list,
+.list-header {
+  margin-bottom: 16px;
+}
+
 .note-list {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  max-height: calc(100vh - 240px);
+  flex: 1;
+  min-height: 0;
   padding-right: 4px;
   overflow: auto;
 }
 
-.group-item,
+.note-item,
+.mode-button,
+.context-menu-item {
+  border: none;
+  border-radius: 12px;
+}
+
 .note-item {
   padding: 14px 16px;
-  background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%);
+  background: rgba(255, 255, 255, 0.94);
   color: #1e3a8a;
   text-align: left;
   cursor: pointer;
-  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.08);
+  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.08);
+  transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-.group-item:hover,
 .note-item:hover {
   transform: translateY(-1px);
 }
 
-.group-item,
-.note-item,
-.panel-form button,
-.mode-button {
-  transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.group-item.active,
 .note-item.active,
 .mode-button.active {
-  background: #1d4ed8;
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
   color: #fff;
 }
 
@@ -578,6 +732,18 @@ const formatTime = (value: string) => new Date(value).toLocaleString()
 
 .mode-button {
   min-width: 76px;
+  height: 42px;
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 12px 24px rgba(37, 99, 235, 0.2);
+  transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.mode-button:hover {
+  box-shadow: 0 16px 30px rgba(37, 99, 235, 0.28);
 }
 
 .note-title-input {
@@ -631,6 +797,30 @@ const formatTime = (value: string) => new Date(value).toLocaleString()
   line-height: 1.7;
 }
 
+.context-menu {
+  position: fixed;
+  z-index: 30;
+  min-width: 180px;
+  padding: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.96);
+  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.35);
+}
+
+.context-menu-item {
+  width: 100%;
+  padding: 10px 12px;
+  background: transparent;
+  color: #e2e8f0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.context-menu-item:hover {
+  background: rgba(59, 130, 246, 0.22);
+}
+
 .preview-pane :deep(h1),
 .preview-pane :deep(h2),
 .preview-pane :deep(h3) {
@@ -679,7 +869,7 @@ const formatTime = (value: string) => new Date(value).toLocaleString()
   }
 
   .thoughts-shell {
-    grid-template-columns: 220px 260px minmax(0, 1fr);
+    grid-template-columns: 320px minmax(0, 1fr);
     min-height: calc(100vh - 24px);
   }
 
@@ -693,13 +883,9 @@ const formatTime = (value: string) => new Date(value).toLocaleString()
     grid-template-columns: 1fr;
   }
 
-  .panel {
+  .panel,
+  .note-list-shell {
     min-height: auto;
-  }
-
-  .group-list,
-  .note-list {
-    max-height: none;
   }
 
   .editor-textarea,
