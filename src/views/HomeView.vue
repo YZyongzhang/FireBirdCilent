@@ -1,9 +1,55 @@
+<script setup lang="ts">
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
+
+const cards = [
+  {
+    title: '个人思考记录',
+    description: '记录和整理你的个人想法、复盘和灵感。',
+    actionText: '进入页面',
+    onClick: () => router.push('/thoughts'),
+  },
+  {
+    title: '项目计划占位',
+    description: '后续可以在这里展示项目计划、进度安排和关键事项。',
+    actionText: '敬请期待',
+  },
+  {
+    title: '资料库占位',
+    description: '后续可以在这里收集常用资料、文档和外部链接。',
+    actionText: '敬请期待',
+  },
+  {
+    title: '灵感卡片占位',
+    description: '后续可以在这里扩展更多灵感内容和临时记录入口。',
+    actionText: '敬请期待',
+  },
+]
+</script>
+
 <template>
   <main class="home-page">
-    <section class="home-card">
-      <p class="home-badge">FireBird Client</p>
-      <h1>Hello World</h1>
-      <p>你已经完成登录，这是一个简单的登录后页面。</p>
+    <section class="home-shell">
+      <div class="home-header-card">
+        <p class="home-badge">FireBird Client</p>
+        <h1>欢迎回来</h1>
+        <p class="home-description">保持登录页面的卡片风格，以下内容作为首页功能入口占位。</p>
+      </div>
+
+      <section class="card-grid">
+        <article
+          v-for="card in cards"
+          :key="card.title"
+          class="feature-card"
+          :class="{ clickable: card.onClick }"
+          @click="card.onClick?.()"
+        >
+          <h2>{{ card.title }}</h2>
+          <p>{{ card.description }}</p>
+          <span>{{ card.actionText }}</span>
+        </article>
+      </section>
     </section>
   </main>
 </template>
@@ -11,23 +57,28 @@
 <style scoped>
 .home-page {
   min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   padding: 24px;
   box-sizing: border-box;
   background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);
 }
 
-.home-card {
+.home-shell {
   width: 100%;
-  max-width: 520px;
-  padding: 48px 32px;
+  max-width: 1080px;
+  margin: 0 auto;
+}
+
+.home-header-card,
+.feature-card {
   border-radius: 20px;
   background: rgba(255, 255, 255, 0.96);
   box-shadow: 0 24px 60px rgba(15, 23, 42, 0.22);
-  text-align: center;
   box-sizing: border-box;
+}
+
+.home-header-card {
+  padding: 40px 32px;
+  margin-bottom: 24px;
 }
 
 .home-badge {
@@ -39,16 +90,53 @@
   text-transform: uppercase;
 }
 
-.home-card h1 {
+.home-header-card h1 {
   margin: 0;
   color: #0f172a;
   font-size: 36px;
 }
 
-.home-card p:last-child {
+.home-description {
   margin: 16px 0 0;
   color: #475569;
   font-size: 16px;
   line-height: 1.6;
+}
+
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 24px;
+}
+
+.feature-card {
+  padding: 28px 24px;
+}
+
+.feature-card h2 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 22px;
+}
+
+.feature-card p {
+  margin: 14px 0 20px;
+  color: #475569;
+  line-height: 1.7;
+}
+
+.feature-card span {
+  color: #2563eb;
+  font-weight: 700;
+}
+
+.clickable {
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.clickable:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 28px 70px rgba(15, 23, 42, 0.28);
 }
 </style>
