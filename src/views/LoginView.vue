@@ -1,14 +1,30 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useRouter } from 'vue-router'
 
+const router = useRouter()
 const username = ref('')
 const password = ref('')
+const errorMessage = ref('')
+
+// const loginApi = async (payload: { username: string; password: string }) => {
+//   return fetch('/api/login', {
+//     method: 'POST',
+//     headers: {
+//       'Content-Type': 'application/json',
+//     },
+//     body: JSON.stringify(payload),
+//   })
+// }
 
 const handleSubmit = () => {
-  console.log('login submit', {
-    username: username.value,
-    password: password.value,
-  })
+  if (username.value === 'admin' && password.value === '123456') {
+    errorMessage.value = ''
+    router.push('/home')
+    return
+  }
+
+  errorMessage.value = '账号或密码错误，请使用 admin / 123456 登录。'
 }
 </script>
 
@@ -31,6 +47,8 @@ const handleSubmit = () => {
           <span>密码</span>
           <input v-model="password" type="password" placeholder="请输入密码" />
         </label>
+
+        <p v-if="errorMessage" class="error-message">{{ errorMessage }}</p>
 
         <button type="submit">登录</button>
       </form>
@@ -114,6 +132,12 @@ const handleSubmit = () => {
 .form-item input:focus {
   border-color: #2563eb;
   box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.15);
+}
+
+.error-message {
+  margin: -6px 0 0;
+  color: #dc2626;
+  font-size: 14px;
 }
 
 button {
