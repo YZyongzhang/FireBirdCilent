@@ -402,25 +402,28 @@ const formatTime = (value: string) => new Date(value).toLocaleString()
 <style scoped>
 .thoughts-page {
   min-height: 100vh;
-  padding: 24px;
+  padding: 16px;
   box-sizing: border-box;
-  background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);
+  background:
+    radial-gradient(circle at top left, rgba(96, 165, 250, 0.22), transparent 28%),
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.18), transparent 24%),
+    linear-gradient(135deg, #020617 0%, #0f172a 45%, #1d4ed8 100%);
 }
 
 .thoughts-shell {
   display: grid;
-  grid-template-columns: 240px 280px minmax(0, 1fr);
-  gap: 24px;
-  max-width: 1440px;
-  margin: 0 auto;
+  grid-template-columns: 260px 320px minmax(0, 1fr);
+  gap: 16px;
+  min-height: calc(100vh - 32px);
 }
 
 .panel {
-  min-height: calc(100vh - 48px);
+  min-height: calc(100vh - 32px);
   padding: 24px;
-  border-radius: 20px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 24px;
   background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.22);
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.28);
   box-sizing: border-box;
 }
 
@@ -491,11 +494,27 @@ const formatTime = (value: string) => new Date(value).toLocaleString()
 .panel-form button,
 .mode-button {
   height: 42px;
-  background: #2563eb;
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
   color: #fff;
   font-size: 14px;
   font-weight: 700;
   cursor: pointer;
+  box-shadow: 0 12px 24px rgba(37, 99, 235, 0.2);
+}
+
+.panel-form button:hover,
+.mode-button:hover {
+  box-shadow: 0 16px 30px rgba(37, 99, 235, 0.28);
+}
+
+.note-panel,
+.editor-panel {
+  backdrop-filter: blur(8px);
+}
+
+.editor-panel {
+  display: flex;
+  flex-direction: column;
 }
 
 .group-list,
@@ -503,15 +522,31 @@ const formatTime = (value: string) => new Date(value).toLocaleString()
   display: flex;
   flex-direction: column;
   gap: 12px;
+  max-height: calc(100vh - 240px);
+  padding-right: 4px;
+  overflow: auto;
 }
 
 .group-item,
 .note-item {
   padding: 14px 16px;
-  background: #eff6ff;
+  background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%);
   color: #1e3a8a;
   text-align: left;
   cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.08);
+}
+
+.group-item:hover,
+.note-item:hover {
+  transform: translateY(-1px);
+}
+
+.group-item,
+.note-item,
+.panel-form button,
+.mode-button {
+  transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .group-item.active,
@@ -551,7 +586,9 @@ const formatTime = (value: string) => new Date(value).toLocaleString()
 
 .editor-body {
   display: grid;
+  flex: 1;
   gap: 16px;
+  min-height: 0;
 }
 
 .editor-body.mode-split {
@@ -561,9 +598,10 @@ const formatTime = (value: string) => new Date(value).toLocaleString()
 .editor-textarea,
 .preview-pane,
 .empty-editor {
-  min-height: calc(100vh - 220px);
-  border-radius: 16px;
-  background: #f8fafc;
+  min-height: 0;
+  height: 100%;
+  border-radius: 20px;
+  background: linear-gradient(180deg, #f8fafc 0%, #eff6ff 100%);
   box-sizing: border-box;
 }
 
@@ -636,8 +674,17 @@ const formatTime = (value: string) => new Date(value).toLocaleString()
 }
 
 @media (max-width: 1200px) {
+  .thoughts-page {
+    padding: 12px;
+  }
+
   .thoughts-shell {
     grid-template-columns: 220px 260px minmax(0, 1fr);
+    min-height: calc(100vh - 24px);
+  }
+
+  .panel {
+    min-height: calc(100vh - 24px);
   }
 }
 
@@ -648,6 +695,11 @@ const formatTime = (value: string) => new Date(value).toLocaleString()
 
   .panel {
     min-height: auto;
+  }
+
+  .group-list,
+  .note-list {
+    max-height: none;
   }
 
   .editor-textarea,
