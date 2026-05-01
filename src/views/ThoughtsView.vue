@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { defaultThoughtGroups, defaultThoughtNotes } from '@/dataset/thoughts'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -25,28 +26,12 @@ interface ContextMenuState {
 
 const route = useRoute()
 const router = useRouter()
-const storageKey = 'firebird-thoughts'
 const previewModes = ['split', 'edit', 'preview'] as const
 
 const createId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 
-const defaultGroups: ThoughtGroup[] = [
-  { id: 'group-inbox', name: '灵感收集' },
-  { id: 'group-review', name: '复盘记录' },
-]
-
-const defaultNotes: ThoughtNote[] = [
-  {
-    id: 'note-welcome',
-    groupId: 'group-inbox',
-    title: '欢迎使用个人思考记录',
-    content: '# 开始记录\n\n- 先创建分组\n- 再新增文档\n- 在右侧使用 Markdown 进行书写\n\n> 这里是类似飞书的轻量思考工作台。',
-    updatedAt: new Date().toISOString(),
-  },
-]
-
-const groups = ref<ThoughtGroup[]>(defaultGroups)
-const notes = ref<ThoughtNote[]>(defaultNotes)
+const groups = ref<ThoughtGroup[]>(defaultThoughtGroups.map((group) => ({ ...group })))
+const notes = ref<ThoughtNote[]>(defaultThoughtNotes.map((note) => ({ ...note })))
 const previewMode = ref<(typeof previewModes)[number]>('preview')
 const contextMenu = ref<ContextMenuState>({
   visible: false,
@@ -54,29 +39,6 @@ const contextMenu = ref<ContextMenuState>({
   y: 0,
   type: 'note-list',
 })
-
-const loadState = () => {
-  const stored = localStorage.getItem(storageKey)
-
-  if (!stored) {
-    return
-  }
-
-  const parsed = JSON.parse(stored) as {
-    groups?: ThoughtGroup[]
-    notes?: ThoughtNote[]
-  }
-
-  if (parsed.groups?.length) {
-    groups.value = parsed.groups
-  }
-
-  if (parsed.notes?.length) {
-    notes.value = parsed.notes
-  }
-}
-
-loadState()
 
 const currentGroupId = computed(() => {
   const routeGroupId = typeof route.params.groupId === 'string' ? route.params.groupId : ''
@@ -115,14 +77,6 @@ const syncRoute = (groupId: string, noteId?: string) => {
 watch(
   [groups, notes, currentGroupId, currentNoteId],
   () => {
-    localStorage.setItem(
-      storageKey,
-      JSON.stringify({
-        groups: groups.value,
-        notes: notes.value,
-      }),
-    )
-
     if (!currentGroupId.value) {
       return
     }

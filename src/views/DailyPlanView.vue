@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { defaultDailyTaskSeeds, initialDailyPlansByDate } from '@/dataset/dailyPlan'
 import { computed, ref, watch } from 'vue'
 
 interface DailyTask {
@@ -15,16 +16,18 @@ interface DailyPlan {
   tasks: DailyTask[]
 }
 
-const storageKey = 'firebird-daily-plans'
-
 const createId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 const formatDateKey = (date: Date) => date.toISOString().slice(0, 10)
 const todayKey = formatDateKey(new Date())
 
-const createDefaultTasks = (): DailyTask[] => [
-  { id: createId(), title: '整理今日重点事项', time: '09:00 - 09:30', done: false, note: '' },
-  { id: createId(), title: '推进核心功能开发', time: '10:00 - 12:00', done: false, note: '' },
-]
+const createDefaultTasks = (): DailyTask[] =>
+  defaultDailyTaskSeeds.map((task) => ({
+    id: createId(),
+    title: task.title,
+    time: task.time,
+    done: false,
+    note: task.note,
+  }))
 
 const createPlan = (date: string): DailyPlan => ({
   date,
@@ -32,9 +35,17 @@ const createPlan = (date: string): DailyPlan => ({
   tasks: createDefaultTasks(),
 })
 
-const plansByDate = ref<Record<string, DailyPlan>>({
-  [todayKey]: createPlan(todayKey),
-})
+const plansByDate = ref<Record<string, DailyPlan>>(
+  Object.fromEntries(
+    Object.entries(initialDailyPlansByDate).map(([date, plan]) => [
+      date,
+      {
+        ...plan,
+        tasks: plan.tasks.map((task) => ({ ...task })),
+      },
+    ]),
+  ),
+)
 const selectedDate = ref(todayKey)
 const exportFormat = ref<'markdown' | 'json'>('markdown')
 const exportMode = ref<'single' | 'range' | 'manual'>('single')
@@ -43,24 +54,6 @@ const exportEndDate = ref(todayKey)
 const manualSelectedDates = ref<string[]>([todayKey])
 const expandedTaskId = ref('')
 const quickTaskTitle = ref('')
-
-const loadState = () => {
-  const stored = localStorage.getItem(storageKey)
-
-  if (!stored) {
-    return
-  }
-
-  const parsed = JSON.parse(stored) as {
-    plansByDate?: Record<string, DailyPlan>
-  }
-
-  if (parsed.plansByDate && Object.keys(parsed.plansByDate).length) {
-    plansByDate.value = parsed.plansByDate
-  }
-}
-
-loadState()
 
 const sortedDates = computed(() => Object.keys(plansByDate.value).sort((left, right) => left.localeCompare(right)))
 
@@ -97,19 +90,6 @@ const formattedSelectedDate = computed(() => {
     weekday: 'short',
   })
 })
-
-watch(
-  plansByDate,
-  () => {
-    localStorage.setItem(
-      storageKey,
-      JSON.stringify({
-        plansByDate: plansByDate.value,
-      }),
-    )
-  },
-  { deep: true, immediate: true },
-)
 
 watch(
   currentPlan,
