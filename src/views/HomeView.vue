@@ -11,9 +11,10 @@ const cards = [
     onClick: () => router.push('/thoughts'),
   },
   {
-    title: '项目计划占位',
-    description: '后续可以在这里展示项目计划、进度安排和关键事项。',
-    actionText: '敬请期待',
+    title: '每日计划',
+    description: '查看今天的安排、任务优先级和关键提醒，帮助你快速进入工作状态。',
+    actionText: '进入页面',
+    onClick: () => router.push('/daily-plan'),
   },
   {
     title: '资料库占位',

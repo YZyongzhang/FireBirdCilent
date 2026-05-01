@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import HomeView from '@/views/HomeView.vue'
 import LoginView from '@/views/LoginView.vue'
 import ThoughtsView from '@/views/ThoughtsView.vue'
+import DailyPlanView from '@/views/DailyPlanView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -24,6 +25,11 @@ const router = createRouter({
       path: '/thoughts/:groupId?/:noteId?',
       name: 'thoughts',
       component: ThoughtsView,
+    },
+    {
+      path: '/daily-plan',
+      name: 'daily-plan',
+      component: DailyPlanView,
     },
   ],
 })
