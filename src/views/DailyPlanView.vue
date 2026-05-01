@@ -41,6 +41,7 @@ const exportMode = ref<'single' | 'range' | 'manual'>('single')
 const exportStartDate = ref(todayKey)
 const exportEndDate = ref(todayKey)
 const manualSelectedDates = ref<string[]>([todayKey])
+const expandedTaskId = ref('')
 
 const loadState = () => {
   const stored = localStorage.getItem(storageKey)
@@ -114,6 +115,23 @@ watch(
   { deep: true, immediate: true },
 )
 
+watch(
+  currentPlan,
+  (plan) => {
+    if (!plan?.tasks.length) {
+      expandedTaskId.value = ''
+      return
+    }
+
+    const hasExpandedTask = plan.tasks.some((task) => task.id === expandedTaskId.value)
+
+    if (!hasExpandedTask) {
+      expandedTaskId.value = plan.tasks[0]?.id ?? ''
+    }
+  },
+  { immediate: true },
+)
+
 watch(selectedDate, (date) => {
   ensurePlan(date)
 
@@ -149,6 +167,10 @@ const toggleDayCompleted = () => {
   }
 }
 
+const toggleTaskExpanded = (taskId: string) => {
+  expandedTaskId.value = expandedTaskId.value === taskId ? '' : taskId
+}
+
 const updateTask = (taskId: string, patch: Partial<DailyTask>) => {
   if (!currentPlan.value) {
     return
@@ -168,22 +190,22 @@ const addTask = () => {
     return
   }
 
+  const newTask = {
+    id: createId(),
+    title: '新的计划事项',
+    time: '',
+    done: false,
+    note: '',
+  }
+
   plansByDate.value = {
     ...plansByDate.value,
     [selectedDate.value]: {
       ...currentPlan.value,
-      tasks: [
-        ...currentPlan.value.tasks,
-        {
-          id: createId(),
-          title: '新的计划事项',
-          time: '',
-          done: false,
-          note: '',
-        },
-      ],
+      tasks: [...currentPlan.value.tasks, newTask],
     },
   }
+  expandedTaskId.value = newTask.id
 }
 
 const removeTask = (taskId: string) => {
@@ -191,12 +213,18 @@ const removeTask = (taskId: string) => {
     return
   }
 
+  const nextTasks = currentPlan.value.tasks.filter((task) => task.id !== taskId)
+
   plansByDate.value = {
     ...plansByDate.value,
     [selectedDate.value]: {
       ...currentPlan.value,
-      tasks: currentPlan.value.tasks.filter((task) => task.id !== taskId),
+      tasks: nextTasks,
     },
+  }
+
+  if (expandedTaskId.value === taskId) {
+    expandedTaskId.value = nextTasks[0]?.id ?? ''
   }
 }
 
@@ -283,7 +311,7 @@ const exportPlans = () => {
         <div>
           <p class="page-badge">Daily Plan</p>
           <h1>每日计划</h1>
-          <p class="page-description">按日期安排任务、补充说明，并将单日或多日计划导出保存。</p>
+          <p class="page-description">聚焦当天重点任务，点击计划即可展开时间和备注细节。</p>
         </div>
         <div class="date-card">
           <span>当前日期</span>
@@ -292,27 +320,31 @@ const exportPlans = () => {
       </header>
 
       <section class="toolbar-grid">
-        <article class="summary-card">
+        <article class="summary-card compact-card">
           <p class="section-badge">概览</p>
-          <h2>当日进度</h2>
+          <h2>进度</h2>
           <div class="summary-number">{{ completedCount }}/{{ currentPlan?.tasks.length ?? 0 }}</div>
-          <p class="summary-text">任务完成状态：{{ isCurrentPlanFullyDone ? '全部完成' : '进行中' }}</p>
-          <button type="button" class="primary-button" @click="toggleDayCompleted">
-            {{ currentPlan?.completed ? '标记为未完成' : '标记当日计划完成' }}
+          <p class="summary-text">{{ currentPlan?.completed ? '当日计划已完成' : '继续推进今日安排' }}</p>
+          <button type="button" class="ghost-button" @click="toggleDayCompleted">
+            {{ currentPlan?.completed ? '取消完成' : '标记完成' }}
           </button>
         </article>
 
-        <article class="control-card">
-          <p class="section-badge">日期计划</p>
-          <h2>选择或创建日期</h2>
-          <label class="field-label">
-            <span>计划日期</span>
+        <article class="control-card compact-card">
+          <div class="compact-card-header">
+            <div>
+              <p class="section-badge">日期</p>
+              <h2>选择计划日</h2>
+            </div>
+            <button type="button" class="ghost-button" @click="createDatePlan">创建</button>
+          </div>
+
+          <label class="field-label inline-field">
+            <span>日期</span>
             <input :value="selectedDate" type="date" @input="selectDate(($event.target as HTMLInputElement).value)" />
           </label>
-          <div class="control-actions">
-            <button type="button" class="primary-button" @click="createDatePlan">创建当天计划</button>
-          </div>
-          <div class="date-chip-list">
+
+          <div class="date-chip-list compact-chip-list">
             <button
               v-for="date in sortedDates"
               :key="date"
@@ -328,49 +360,52 @@ const exportPlans = () => {
       </section>
 
       <section class="content-grid">
-        <article class="export-card">
-          <p class="section-badge">导出</p>
-          <h2>导出计划</h2>
+        <article class="export-card compact-card">
+          <div class="compact-card-header">
+            <div>
+              <p class="section-badge">导出</p>
+              <h2>导出计划</h2>
+            </div>
+            <button type="button" class="ghost-button" @click="exportPlans">导出</button>
+          </div>
 
-          <label class="field-label">
-            <span>导出格式</span>
+          <label class="field-label inline-field">
+            <span>格式</span>
             <select v-model="exportFormat">
               <option value="markdown">Markdown</option>
               <option value="json">JSON</option>
             </select>
           </label>
 
-          <label class="field-label">
-            <span>导出方式</span>
+          <label class="field-label inline-field">
+            <span>方式</span>
             <select v-model="exportMode">
-              <option value="single">单日导出</option>
-              <option value="range">按日期区间</option>
-              <option value="manual">手动多选日期</option>
+              <option value="single">单日</option>
+              <option value="range">区间</option>
+              <option value="manual">多选</option>
             </select>
           </label>
 
           <template v-if="exportMode === 'range'">
-            <label class="field-label">
-              <span>开始日期</span>
+            <label class="field-label inline-field">
+              <span>开始</span>
               <input v-model="exportStartDate" type="date" />
             </label>
-            <label class="field-label">
-              <span>结束日期</span>
+            <label class="field-label inline-field">
+              <span>结束</span>
               <input v-model="exportEndDate" type="date" />
             </label>
           </template>
 
-          <div v-if="exportMode === 'manual'" class="manual-date-list">
+          <div v-if="exportMode === 'manual'" class="manual-date-list compact-manual-list">
             <label v-for="date in sortedDates" :key="date" class="manual-date-item">
               <input :checked="manualSelectedDates.includes(date)" type="checkbox" @change="toggleManualDate(date)" />
               <span>{{ date }}</span>
             </label>
           </div>
-
-          <button type="button" class="primary-button export-button" @click="exportPlans">导出计划</button>
         </article>
 
-        <article class="tasks-card">
+        <article class="tasks-card focus-card">
           <div class="tasks-header">
             <div>
               <p class="section-badge">任务列表</p>
@@ -379,30 +414,50 @@ const exportPlans = () => {
             <button type="button" class="primary-button" @click="addTask">新增计划</button>
           </div>
 
-          <div class="task-list">
-            <article v-for="task in currentPlan?.tasks ?? []" :key="task.id" class="task-item" :class="{ done: task.done }">
-              <div class="task-top-row">
-                <label class="task-check">
-                  <input :checked="task.done" type="checkbox" @change="updateTask(task.id, { done: !task.done })" />
-                  <span>完成</span>
+          <div class="task-list compact-task-list">
+            <article
+              v-for="task in currentPlan?.tasks ?? []"
+              :key="task.id"
+              class="task-item"
+              :class="{ done: task.done, expanded: expandedTaskId === task.id }"
+            >
+              <button type="button" class="task-summary" @click="toggleTaskExpanded(task.id)">
+                <div class="task-summary-main">
+                  <label class="task-check" @click.stop>
+                    <input :checked="task.done" type="checkbox" @change="updateTask(task.id, { done: !task.done })" />
+                    <span>{{ task.done ? '已完成' : '待完成' }}</span>
+                  </label>
+
+                  <input
+                    class="task-title-input"
+                    :value="task.title"
+                    type="text"
+                    @click.stop
+                    @input="updateTask(task.id, { title: ($event.target as HTMLInputElement).value })"
+                  />
+                </div>
+
+                <div class="task-summary-side">
+                  <span class="task-time-pill">{{ task.time || '未设置时间' }}</span>
+                  <span class="task-expand-indicator">{{ expandedTaskId === task.id ? '收起' : '展开' }}</span>
+                </div>
+              </button>
+
+              <div v-if="expandedTaskId === task.id" class="task-detail-panel">
+                <label class="field-label">
+                  <span>时间安排</span>
+                  <input :value="task.time" type="text" placeholder="例如 10:00 - 11:00" @input="updateTask(task.id, { time: ($event.target as HTMLInputElement).value })" />
                 </label>
-                <button type="button" class="link-button" @click="removeTask(task.id)">删除</button>
+
+                <label class="field-label">
+                  <span>补充说明</span>
+                  <textarea :value="task.note" rows="4" placeholder="写下这项计划的补充说明..." @input="updateTask(task.id, { note: ($event.target as HTMLTextAreaElement).value })"></textarea>
+                </label>
+
+                <div class="task-detail-actions">
+                  <button type="button" class="link-button" @click="removeTask(task.id)">删除这条计划</button>
+                </div>
               </div>
-
-              <label class="field-label">
-                <span>计划标题</span>
-                <input :value="task.title" type="text" @input="updateTask(task.id, { title: ($event.target as HTMLInputElement).value })" />
-              </label>
-
-              <label class="field-label">
-                <span>时间安排</span>
-                <input :value="task.time" type="text" placeholder="例如 10:00 - 11:00" @input="updateTask(task.id, { time: ($event.target as HTMLInputElement).value })" />
-              </label>
-
-              <label class="field-label">
-                <span>补充说明</span>
-                <textarea :value="task.note" rows="4" placeholder="写下这项计划的补充说明..." @input="updateTask(task.id, { note: ($event.target as HTMLTextAreaElement).value })"></textarea>
-              </label>
             </article>
 
             <p v-if="!(currentPlan?.tasks.length ?? 0)" class="empty-text">当前日期还没有计划，点击“新增计划”开始安排。</p>
@@ -416,14 +471,16 @@ const exportPlans = () => {
 <style scoped>
 .daily-plan-page {
   min-height: 100vh;
-  padding: 24px;
+  padding: 20px;
   box-sizing: border-box;
-  background: linear-gradient(135deg, #0f172a 0%, #1d4ed8 55%, #60a5fa 100%);
+  background:
+    radial-gradient(circle at top left, rgba(96, 165, 250, 0.18), transparent 28%),
+    linear-gradient(135deg, #0f172a 0%, #1d4ed8 55%, #60a5fa 100%);
 }
 
 .daily-plan-shell {
   width: 100%;
-  max-width: 1200px;
+  max-width: 1240px;
   margin: 0 auto;
 }
 
@@ -432,26 +489,26 @@ const exportPlans = () => {
 .control-card,
 .export-card,
 .tasks-card {
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.22);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.18);
   box-sizing: border-box;
 }
 
 .hero-card {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 24px;
-  padding: 36px 32px;
-  margin-bottom: 24px;
+  gap: 20px;
+  padding: 24px 28px;
+  margin-bottom: 18px;
 }
 
 .page-badge,
 .section-badge {
-  margin: 0 0 12px;
+  margin: 0 0 8px;
   color: #2563eb;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -467,120 +524,154 @@ const exportPlans = () => {
 }
 
 .hero-card h1 {
-  font-size: 36px;
+  font-size: 30px;
 }
 
 .page-description,
 .summary-text,
 .empty-text,
 .field-label span,
-.task-check span {
+.task-check span,
+.task-expand-indicator {
   color: #475569;
-  line-height: 1.6;
+  line-height: 1.5;
 }
 
 .page-description {
-  margin: 16px 0 0;
-  max-width: 560px;
+  margin: 10px 0 0;
+  max-width: 520px;
+  font-size: 14px;
 }
 
 .date-card {
-  min-width: 220px;
-  padding: 20px;
-  border-radius: 20px;
+  min-width: 200px;
+  padding: 16px 18px;
+  border-radius: 18px;
   background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
 }
 
 .date-card span {
   display: block;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   color: #1d4ed8;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
 }
 
 .date-card strong {
   color: #0f172a;
-  font-size: 18px;
-  line-height: 1.6;
+  font-size: 16px;
+  line-height: 1.5;
 }
 
 .toolbar-grid,
 .content-grid {
   display: grid;
-  gap: 24px;
-  margin-bottom: 24px;
+  gap: 18px;
+  margin-bottom: 18px;
 }
 
 .toolbar-grid {
-  grid-template-columns: 280px minmax(0, 1fr);
+  grid-template-columns: 220px minmax(0, 1fr);
 }
 
 .content-grid {
-  grid-template-columns: 320px minmax(0, 1fr);
+  grid-template-columns: 260px minmax(0, 1fr);
 }
 
-.summary-card,
-.control-card,
-.export-card,
-.tasks-card {
-  padding: 28px;
+.compact-card,
+.focus-card {
+  padding: 20px;
+}
+
+.focus-card {
+  padding: 22px;
 }
 
 .summary-number {
-  margin: 12px 0;
+  margin: 10px 0;
   color: #2563eb;
-  font-size: 48px;
+  font-size: 40px;
   font-weight: 800;
 }
 
 .summary-text,
 .empty-text {
-  margin: 0 0 18px;
+  margin: 0 0 14px;
 }
 
 .primary-button,
+.ghost-button,
 .date-chip,
 select,
 input,
 textarea,
-.link-button {
+.link-button,
+.task-summary {
   border-radius: 12px;
   font-size: 14px;
   box-sizing: border-box;
 }
 
 .primary-button,
+.ghost-button,
+.date-chip,
+.link-button,
+.task-summary {
+  border: none;
+}
+
+.primary-button,
+.ghost-button,
 .date-chip,
 .link-button {
-  border: none;
   cursor: pointer;
 }
 
 .primary-button {
-  min-height: 44px;
-  padding: 0 18px;
+  min-height: 40px;
+  padding: 0 16px;
   background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
   color: #fff;
   font-weight: 700;
 }
 
-.control-actions,
-.export-button {
-  margin-top: 16px;
+.ghost-button {
+  min-height: 36px;
+  padding: 0 14px;
+  background: rgba(37, 99, 235, 0.08);
+  color: #1d4ed8;
+  font-weight: 700;
+}
+
+.compact-card-header,
+.tasks-header,
+.task-detail-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tasks-header {
+  margin-bottom: 16px;
 }
 
 .field-label {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-top: 16px;
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.inline-field {
+  margin-top: 12px;
 }
 
 .field-label span,
 .task-check span {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
 }
 
@@ -589,7 +680,7 @@ input,
 textarea {
   width: 100%;
   border: 1px solid #cbd5e1;
-  background: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.96);
   color: #0f172a;
   outline: none;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
@@ -597,12 +688,12 @@ textarea {
 
 select,
 input {
-  min-height: 44px;
-  padding: 0 14px;
+  min-height: 40px;
+  padding: 0 12px;
 }
 
 textarea {
-  padding: 14px;
+  padding: 12px;
   resize: vertical;
 }
 
@@ -610,7 +701,7 @@ select:focus,
 input:focus,
 textarea:focus {
   border-color: #2563eb;
-  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.15);
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
 }
 
 .date-chip-list,
@@ -618,23 +709,32 @@ textarea:focus {
 .task-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
-.date-chip-list {
-  margin-top: 18px;
+.compact-chip-list {
+  margin-top: 14px;
+  max-height: 180px;
+  overflow: auto;
 }
 
 .date-chip {
-  padding: 12px 14px;
+  padding: 10px 12px;
   background: #eff6ff;
   color: #1d4ed8;
   text-align: left;
+  font-weight: 700;
 }
 
 .date-chip.active {
   background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
   color: #fff;
+}
+
+.compact-manual-list {
+  margin-top: 12px;
+  max-height: 180px;
+  overflow: auto;
 }
 
 .manual-date-item,
@@ -644,26 +744,89 @@ textarea:focus {
   gap: 10px;
 }
 
-.tasks-header,
-.task-top-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.tasks-header {
-  margin-bottom: 18px;
+.compact-task-list {
+  gap: 12px;
 }
 
 .task-item {
-  padding: 18px;
-  border-radius: 20px;
-  background: linear-gradient(180deg, #f8fafc 0%, #eff6ff 100%);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.98) 0%, rgba(239, 246, 255, 0.92) 100%);
+  overflow: hidden;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.task-item:hover,
+.task-item.expanded {
+  transform: translateY(-1px);
+  border-color: rgba(37, 99, 235, 0.28);
+  box-shadow: 0 18px 34px rgba(37, 99, 235, 0.12);
 }
 
 .task-item.done {
-  opacity: 0.82;
+  background: linear-gradient(180deg, rgba(240, 253, 244, 0.98) 0%, rgba(220, 252, 231, 0.9) 100%);
+}
+
+.task-summary {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px 18px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.task-summary-main,
+.task-summary-side {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.task-summary-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.task-summary-side {
+  flex-shrink: 0;
+}
+
+.task-title-input {
+  border: none;
+  background: transparent;
+  min-height: auto;
+  padding: 0;
+  color: #0f172a;
+  font-size: 18px;
+  font-weight: 700;
+  box-shadow: none;
+}
+
+.task-title-input:focus {
+  box-shadow: none;
+}
+
+.task-time-pill {
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.08);
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.task-expand-indicator {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.task-detail-panel {
+  padding: 0 18px 18px;
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
 }
 
 .link-button {
@@ -674,8 +837,13 @@ textarea:focus {
 }
 
 @media (max-width: 960px) {
+  .daily-plan-page {
+    padding: 14px;
+  }
+
   .hero-card {
     flex-direction: column;
+    align-items: flex-start;
   }
 
   .date-card {
@@ -686,6 +854,18 @@ textarea:focus {
   .toolbar-grid,
   .content-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .task-summary {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .task-summary-side {
+    width: 100%;
+    justify-content: space-between;
   }
 }
 </style>
