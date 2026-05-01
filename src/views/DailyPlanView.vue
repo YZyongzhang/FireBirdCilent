@@ -42,6 +42,7 @@ const exportStartDate = ref(todayKey)
 const exportEndDate = ref(todayKey)
 const manualSelectedDates = ref<string[]>([todayKey])
 const expandedTaskId = ref('')
+const quickTaskTitle = ref('')
 
 const loadState = () => {
   const stored = localStorage.getItem(storageKey)
@@ -81,14 +82,9 @@ if (!plansByDate.value[selectedDate.value]) {
 }
 
 const currentPlan = computed(() => plansByDate.value[selectedDate.value] ?? null)
+const totalCount = computed(() => currentPlan.value?.tasks.length ?? 0)
 const completedCount = computed(() => currentPlan.value?.tasks.filter((task) => task.done).length ?? 0)
-const isCurrentPlanFullyDone = computed(() => {
-  if (!currentPlan.value) {
-    return false
-  }
-
-  return currentPlan.value.tasks.length > 0 && currentPlan.value.tasks.every((task) => task.done)
-})
+const pendingCount = computed(() => totalCount.value - completedCount.value)
 const formattedSelectedDate = computed(() => {
   if (!currentPlan.value?.date) {
     return ''
@@ -98,7 +94,7 @@ const formattedSelectedDate = computed(() => {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
-    weekday: 'long',
+    weekday: 'short',
   })
 })
 
@@ -185,18 +181,20 @@ const updateTask = (taskId: string, patch: Partial<DailyTask>) => {
   }
 }
 
-const addTask = () => {
+const createTask = (title: string) => ({
+  id: createId(),
+  title,
+  time: '',
+  done: false,
+  note: '',
+})
+
+const addTask = (title = '新的计划事项') => {
   if (!currentPlan.value) {
     return
   }
 
-  const newTask = {
-    id: createId(),
-    title: '新的计划事项',
-    time: '',
-    done: false,
-    note: '',
-  }
+  const newTask = createTask(title)
 
   plansByDate.value = {
     ...plansByDate.value,
@@ -206,6 +204,17 @@ const addTask = () => {
     },
   }
   expandedTaskId.value = newTask.id
+}
+
+const addQuickTask = () => {
+  const title = quickTaskTitle.value.trim()
+
+  if (!title) {
+    return
+  }
+
+  addTask(title)
+  quickTaskTitle.value = ''
 }
 
 const removeTask = (taskId: string) => {
@@ -306,50 +315,125 @@ const exportPlans = () => {
 
 <template>
   <main class="daily-plan-page">
-    <section class="daily-plan-shell">
-      <header class="hero-card">
-        <div>
-          <p class="page-badge">Daily Plan</p>
-          <h1>每日计划</h1>
-          <p class="page-description">聚焦当天重点任务，点击计划即可展开时间和备注细节。</p>
+    <section class="container-shell">
+      <header class="hero">
+        <div class="date-badge">
+          <span class="date-pill">{{ formattedSelectedDate }}</span>
+          <span class="quote-text">把握今日</span>
         </div>
-        <div class="date-card">
-          <span>当前日期</span>
-          <strong>{{ formattedSelectedDate }}</strong>
-        </div>
+        <h1>每日计划</h1>
+        <p class="sub-text">记录要事 · 逐步完成 · 保持节奏</p>
       </header>
 
-      <section class="toolbar-grid">
-        <article class="summary-card compact-card">
-          <p class="section-badge">概览</p>
-          <h2>进度</h2>
-          <div class="summary-number">{{ completedCount }}/{{ currentPlan?.tasks.length ?? 0 }}</div>
-          <p class="summary-text">{{ currentPlan?.completed ? '当日计划已完成' : '继续推进今日安排' }}</p>
-          <button type="button" class="ghost-button" @click="toggleDayCompleted">
-            {{ currentPlan?.completed ? '取消完成' : '标记完成' }}
-          </button>
+      <section class="stats">
+        <article class="stat-card">
+          <div class="stat-number">{{ totalCount }}</div>
+          <div class="stat-label">全部任务</div>
         </article>
+        <article class="stat-card">
+          <div class="stat-number">{{ completedCount }}</div>
+          <div class="stat-label">已完成</div>
+        </article>
+        <article class="stat-card">
+          <div class="stat-number">{{ pendingCount }}</div>
+          <div class="stat-label">进行中</div>
+        </article>
+      </section>
 
-        <article class="control-card compact-card">
-          <div class="compact-card-header">
-            <div>
-              <p class="section-badge">日期</p>
-              <h2>选择计划日</h2>
+      <section class="add-task">
+        <input
+          v-model="quickTaskTitle"
+          type="text"
+          placeholder="写一个计划，比如“完成报告”或“晨跑 30 分钟”"
+          @keyup.enter="addQuickTask"
+        />
+        <button type="button" @click="addQuickTask">添加计划</button>
+      </section>
+
+      <section class="task-list-container">
+        <div class="tasks-header">
+          <span>今日待办清单</span>
+          <span>点击任务展开时间与备注</span>
+        </div>
+
+        <div class="tasks">
+          <article
+            v-for="task in currentPlan?.tasks ?? []"
+            :key="task.id"
+            class="task-item"
+            :class="{ completed: task.done, expanded: expandedTaskId === task.id }"
+            @click="toggleTaskExpanded(task.id)"
+          >
+            <button type="button" class="task-check" :class="{ completed: task.done }" @click.stop="updateTask(task.id, { done: !task.done })">
+              {{ task.done ? '✓' : '' }}
+            </button>
+
+            <div class="task-main">
+              <div class="task-row">
+                <input
+                  class="task-title-input"
+                  :class="{ completed: task.done }"
+                  :value="task.title"
+                  type="text"
+                  @click.stop
+                  @input="updateTask(task.id, { title: ($event.target as HTMLInputElement).value })"
+                />
+                <span class="task-tag">{{ task.time || '未设置时间' }}</span>
+                <button type="button" class="delete-btn" @click.stop="removeTask(task.id)">×</button>
+              </div>
+
+              <div v-if="expandedTaskId === task.id" class="task-detail-panel" @click.stop>
+                <label class="detail-field">
+                  <span>时间安排</span>
+                  <input
+                    :value="task.time"
+                    type="text"
+                    placeholder="例如 10:00 - 11:00"
+                    @input="updateTask(task.id, { time: ($event.target as HTMLInputElement).value })"
+                  />
+                </label>
+
+                <label class="detail-field">
+                  <span>补充说明</span>
+                  <textarea
+                    :value="task.note"
+                    rows="4"
+                    placeholder="写下这项计划的备注说明..."
+                    @input="updateTask(task.id, { note: ($event.target as HTMLTextAreaElement).value })"
+                  ></textarea>
+                </label>
+              </div>
             </div>
-            <button type="button" class="ghost-button" @click="createDatePlan">创建</button>
+          </article>
+
+          <div v-if="!(currentPlan?.tasks.length ?? 0)" class="empty-state">
+            <strong>暂无任务</strong>
+            <p>先添加一项今天的计划吧。</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="tool-grid">
+        <article class="tool-card">
+          <div class="tool-header">
+            <div>
+              <p class="tool-title">日期计划</p>
+              <h2>选择与创建</h2>
+            </div>
+            <button type="button" class="secondary-btn" @click="createDatePlan">创建</button>
           </div>
 
-          <label class="field-label inline-field">
+          <label class="detail-field compact-field">
             <span>日期</span>
             <input :value="selectedDate" type="date" @input="selectDate(($event.target as HTMLInputElement).value)" />
           </label>
 
-          <div class="date-chip-list compact-chip-list">
+          <div class="date-list">
             <button
               v-for="date in sortedDates"
               :key="date"
               type="button"
-              class="date-chip"
+              class="date-item"
               :class="{ active: date === selectedDate }"
               @click="selectDate(date)"
             >
@@ -357,110 +441,58 @@ const exportPlans = () => {
             </button>
           </div>
         </article>
-      </section>
 
-      <section class="content-grid">
-        <article class="export-card compact-card">
-          <div class="compact-card-header">
+        <article class="tool-card wide-card">
+          <div class="tool-header">
             <div>
-              <p class="section-badge">导出</p>
-              <h2>导出计划</h2>
+              <p class="tool-title">导出与状态</p>
+              <h2>保持完整功能</h2>
             </div>
-            <button type="button" class="ghost-button" @click="exportPlans">导出</button>
+            <button type="button" class="secondary-btn" @click="toggleDayCompleted">
+              {{ currentPlan?.completed ? '取消完成' : '标记完成' }}
+            </button>
           </div>
 
-          <label class="field-label inline-field">
-            <span>格式</span>
-            <select v-model="exportFormat">
-              <option value="markdown">Markdown</option>
-              <option value="json">JSON</option>
-            </select>
-          </label>
+          <div class="export-grid">
+            <label class="detail-field compact-field">
+              <span>格式</span>
+              <select v-model="exportFormat">
+                <option value="markdown">Markdown</option>
+                <option value="json">JSON</option>
+              </select>
+            </label>
 
-          <label class="field-label inline-field">
-            <span>方式</span>
-            <select v-model="exportMode">
-              <option value="single">单日</option>
-              <option value="range">区间</option>
-              <option value="manual">多选</option>
-            </select>
-          </label>
+            <label class="detail-field compact-field">
+              <span>方式</span>
+              <select v-model="exportMode">
+                <option value="single">单日</option>
+                <option value="range">区间</option>
+                <option value="manual">多选</option>
+              </select>
+            </label>
+          </div>
 
-          <template v-if="exportMode === 'range'">
-            <label class="field-label inline-field">
+          <div v-if="exportMode === 'range'" class="export-grid">
+            <label class="detail-field compact-field">
               <span>开始</span>
               <input v-model="exportStartDate" type="date" />
             </label>
-            <label class="field-label inline-field">
+            <label class="detail-field compact-field">
               <span>结束</span>
               <input v-model="exportEndDate" type="date" />
             </label>
-          </template>
+          </div>
 
-          <div v-if="exportMode === 'manual'" class="manual-date-list compact-manual-list">
+          <div v-if="exportMode === 'manual'" class="manual-date-list">
             <label v-for="date in sortedDates" :key="date" class="manual-date-item">
               <input :checked="manualSelectedDates.includes(date)" type="checkbox" @change="toggleManualDate(date)" />
               <span>{{ date }}</span>
             </label>
           </div>
-        </article>
 
-        <article class="tasks-card focus-card">
-          <div class="tasks-header">
-            <div>
-              <p class="section-badge">任务列表</p>
-              <h2>{{ currentPlan?.date || '未选择日期' }}</h2>
-            </div>
-            <button type="button" class="primary-button" @click="addTask">新增计划</button>
-          </div>
-
-          <div class="task-list compact-task-list">
-            <article
-              v-for="task in currentPlan?.tasks ?? []"
-              :key="task.id"
-              class="task-item"
-              :class="{ done: task.done, expanded: expandedTaskId === task.id }"
-            >
-              <button type="button" class="task-summary" @click="toggleTaskExpanded(task.id)">
-                <div class="task-summary-main">
-                  <label class="task-check" @click.stop>
-                    <input :checked="task.done" type="checkbox" @change="updateTask(task.id, { done: !task.done })" />
-                    <span>{{ task.done ? '已完成' : '待完成' }}</span>
-                  </label>
-
-                  <input
-                    class="task-title-input"
-                    :value="task.title"
-                    type="text"
-                    @click.stop
-                    @input="updateTask(task.id, { title: ($event.target as HTMLInputElement).value })"
-                  />
-                </div>
-
-                <div class="task-summary-side">
-                  <span class="task-time-pill">{{ task.time || '未设置时间' }}</span>
-                  <span class="task-expand-indicator">{{ expandedTaskId === task.id ? '收起' : '展开' }}</span>
-                </div>
-              </button>
-
-              <div v-if="expandedTaskId === task.id" class="task-detail-panel">
-                <label class="field-label">
-                  <span>时间安排</span>
-                  <input :value="task.time" type="text" placeholder="例如 10:00 - 11:00" @input="updateTask(task.id, { time: ($event.target as HTMLInputElement).value })" />
-                </label>
-
-                <label class="field-label">
-                  <span>补充说明</span>
-                  <textarea :value="task.note" rows="4" placeholder="写下这项计划的补充说明..." @input="updateTask(task.id, { note: ($event.target as HTMLTextAreaElement).value })"></textarea>
-                </label>
-
-                <div class="task-detail-actions">
-                  <button type="button" class="link-button" @click="removeTask(task.id)">删除这条计划</button>
-                </div>
-              </div>
-            </article>
-
-            <p v-if="!(currentPlan?.tasks.length ?? 0)" class="empty-text">当前日期还没有计划，点击“新增计划”开始安排。</p>
+          <div class="tool-actions">
+            <span class="status-pill">{{ currentPlan?.completed ? '当日计划已完成' : '当日计划进行中' }}</span>
+            <button type="button" class="secondary-btn" @click="exportPlans">导出计划</button>
           </div>
         </article>
       </section>
@@ -471,401 +503,459 @@ const exportPlans = () => {
 <style scoped>
 .daily-plan-page {
   min-height: 100vh;
-  padding: 20px;
+  padding: 32px 20px;
+  background: linear-gradient(145deg, #f0f7ff 0%, #e9eef5 100%);
   box-sizing: border-box;
-  background:
-    radial-gradient(circle at top left, rgba(96, 165, 250, 0.18), transparent 28%),
-    linear-gradient(135deg, #0f172a 0%, #1d4ed8 55%, #60a5fa 100%);
 }
 
-.daily-plan-shell {
-  width: 100%;
-  max-width: 1240px;
+.container-shell {
+  max-width: 860px;
   margin: 0 auto;
+  background: rgba(255, 255, 255, 0.76);
+  backdrop-filter: blur(4px);
+  border-radius: 40px;
+  box-shadow: 0 25px 45px -12px rgba(0, 0, 0, 0.2), 0 2px 5px rgba(0, 0, 0, 0.02);
+  overflow: hidden;
 }
 
-.hero-card,
-.summary-card,
-.control-card,
-.export-card,
-.tasks-card {
-  border-radius: 22px;
-  background: rgba(255, 255, 255, 0.94);
-  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.18);
-  box-sizing: border-box;
+.hero {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(8px);
+  padding: 28px 32px 20px;
+  border-bottom: 1px solid rgba(100, 108, 118, 0.12);
 }
 
-.hero-card {
+.date-badge {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  padding: 24px 28px;
-  margin-bottom: 18px;
-}
-
-.page-badge,
-.section-badge {
-  margin: 0 0 8px;
-  color: #2563eb;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.hero-card h1,
-.summary-card h2,
-.control-card h2,
-.export-card h2,
-.tasks-card h2 {
-  margin: 0;
-  color: #0f172a;
-}
-
-.hero-card h1 {
-  font-size: 30px;
-}
-
-.page-description,
-.summary-text,
-.empty-text,
-.field-label span,
-.task-check span,
-.task-expand-indicator {
-  color: #475569;
-  line-height: 1.5;
-}
-
-.page-description {
-  margin: 10px 0 0;
-  max-width: 520px;
-  font-size: 14px;
-}
-
-.date-card {
-  min-width: 200px;
-  padding: 16px 18px;
-  border-radius: 18px;
-  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
-}
-
-.date-card span {
-  display: block;
-  margin-bottom: 6px;
-  color: #1d4ed8;
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
-}
-
-.date-card strong {
-  color: #0f172a;
-  font-size: 16px;
-  line-height: 1.5;
-}
-
-.toolbar-grid,
-.content-grid {
-  display: grid;
-  gap: 18px;
-  margin-bottom: 18px;
-}
-
-.toolbar-grid {
-  grid-template-columns: 220px minmax(0, 1fr);
-}
-
-.content-grid {
-  grid-template-columns: 260px minmax(0, 1fr);
-}
-
-.compact-card,
-.focus-card {
-  padding: 20px;
-}
-
-.focus-card {
-  padding: 22px;
-}
-
-.summary-number {
-  margin: 10px 0;
-  color: #2563eb;
-  font-size: 40px;
-  font-weight: 800;
-}
-
-.summary-text,
-.empty-text {
-  margin: 0 0 14px;
-}
-
-.primary-button,
-.ghost-button,
-.date-chip,
-select,
-input,
-textarea,
-.link-button,
-.task-summary {
-  border-radius: 12px;
-  font-size: 14px;
-  box-sizing: border-box;
-}
-
-.primary-button,
-.ghost-button,
-.date-chip,
-.link-button,
-.task-summary {
-  border: none;
-}
-
-.primary-button,
-.ghost-button,
-.date-chip,
-.link-button {
-  cursor: pointer;
-}
-
-.primary-button {
-  min-height: 40px;
-  padding: 0 16px;
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-  color: #fff;
-  font-weight: 700;
-}
-
-.ghost-button {
-  min-height: 36px;
-  padding: 0 14px;
-  background: rgba(37, 99, 235, 0.08);
-  color: #1d4ed8;
-  font-weight: 700;
-}
-
-.compact-card-header,
-.tasks-header,
-.task-detail-actions {
-  display: flex;
-  align-items: center;
+  align-items: baseline;
   justify-content: space-between;
   gap: 12px;
-}
-
-.tasks-header {
+  flex-wrap: wrap;
   margin-bottom: 16px;
 }
 
-.field-label {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 14px;
+.date-pill {
+  font-size: 14px;
+  font-weight: 500;
+  background: #eef2ff;
+  padding: 6px 16px;
+  border-radius: 999px;
+  color: #2c3e66;
 }
 
-.inline-field {
-  margin-top: 12px;
-}
-
-.field-label span,
-.task-check span {
+.quote-text {
   font-size: 13px;
+  color: #5b6e8c;
+  font-style: italic;
+}
+
+.hero h1 {
+  font-size: 32px;
   font-weight: 700;
+  letter-spacing: -0.3px;
+  background: linear-gradient(135deg, #1f2b48, #2c3e66);
+  -webkit-background-clip: text;
+  color: transparent;
+  margin: 0 0 6px;
 }
 
-select,
-input,
-textarea {
-  width: 100%;
-  border: 1px solid #cbd5e1;
-  background: rgba(255, 255, 255, 0.96);
-  color: #0f172a;
+.sub-text {
+  color: #4a5b7a;
+  font-size: 14px;
+  font-weight: 400;
+  border-left: 3px solid #7c8db0;
+  padding-left: 12px;
+}
+
+.stats {
+  display: flex;
+  gap: 16px;
+  padding: 18px 32px;
+  background: rgba(254, 254, 254, 0.8);
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.stat-card {
+  background: #fff;
+  border-radius: 24px;
+  padding: 12px 18px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02);
+  flex: 1;
+  text-align: center;
+  border: 1px solid #eef2ff;
+}
+
+.stat-number {
+  font-size: 28px;
+  font-weight: 800;
+  color: #2c3e66;
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: #6a7b9b;
+  font-weight: 600;
+}
+
+.add-task {
+  padding: 20px 32px 8px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.add-task input,
+.detail-field input,
+.detail-field textarea,
+.detail-field select {
+  border: 1.5px solid #e2e8f0;
+  border-radius: 22px;
+  background: #fff;
   outline: none;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  color: #1f2a3e;
+  transition: 0.2s;
+  width: 100%;
+  box-sizing: border-box;
 }
 
-select,
-input {
-  min-height: 40px;
-  padding: 0 12px;
+.add-task input {
+  flex: 1;
+  padding: 14px 18px;
+  font-size: 15px;
+  font-weight: 500;
 }
 
-textarea {
-  padding: 12px;
-  resize: vertical;
+.add-task input:focus,
+.detail-field input:focus,
+.detail-field textarea:focus,
+.detail-field select:focus {
+  border-color: #8ba0c7;
+  box-shadow: 0 0 0 3px rgba(99, 128, 180, 0.2);
 }
 
-select:focus,
-input:focus,
-textarea:focus {
-  border-color: #2563eb;
-  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+.add-task button,
+.secondary-btn {
+  background: #2c3e66;
+  border: none;
+  color: #fff;
+  padding: 12px 18px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: 0.2s;
 }
 
-.date-chip-list,
-.manual-date-list,
-.task-list {
+.add-task button:hover,
+.secondary-btn:hover,
+.date-item:hover {
+  transform: translateY(-1px);
+}
+
+.task-list-container {
+  padding: 8px 28px 24px;
+}
+
+.tasks-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #5a6e8a;
+  padding: 0 6px;
+}
+
+.tasks {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-}
-
-.compact-chip-list {
-  margin-top: 14px;
-  max-height: 180px;
-  overflow: auto;
-}
-
-.date-chip {
-  padding: 10px 12px;
-  background: #eff6ff;
-  color: #1d4ed8;
-  text-align: left;
-  font-weight: 700;
-}
-
-.date-chip.active {
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-  color: #fff;
-}
-
-.compact-manual-list {
-  margin-top: 12px;
-  max-height: 180px;
-  overflow: auto;
-}
-
-.manual-date-item,
-.task-check {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.compact-task-list {
   gap: 12px;
 }
 
 .task-item {
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 18px;
-  background: linear-gradient(180deg, rgba(248, 250, 252, 0.98) 0%, rgba(239, 246, 255, 0.92) 100%);
-  overflow: hidden;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  background: #fff;
+  border-radius: 22px;
+  padding: 14px 16px 14px 18px;
+  display: flex;
+  gap: 14px;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.03);
+  border: 1px solid #eef2fa;
+  transition: 0.2s;
+  cursor: pointer;
 }
 
 .task-item:hover,
 .task-item.expanded {
-  transform: translateY(-1px);
-  border-color: rgba(37, 99, 235, 0.28);
-  box-shadow: 0 18px 34px rgba(37, 99, 235, 0.12);
+  border-color: #cdd9f0;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.05);
+  transform: scale(1.01);
 }
 
-.task-item.done {
-  background: linear-gradient(180deg, rgba(240, 253, 244, 0.98) 0%, rgba(220, 252, 231, 0.9) 100%);
+.task-item.completed {
+  background: #f8fbff;
 }
 
-.task-summary {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  padding: 16px 18px;
-  background: transparent;
-  text-align: left;
+.task-check {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid #b9c4dd;
+  background: #fff;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 12px;
+  flex-shrink: 0;
+  margin-top: 2px;
 }
 
-.task-summary-main,
-.task-summary-side {
+.task-check.completed {
+  background: #2c3e66;
+  border-color: #2c3e66;
+}
+
+.task-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.task-row {
   display: flex;
   align-items: center;
-  gap: 12px;
-}
-
-.task-summary-main {
-  min-width: 0;
-  flex: 1;
-}
-
-.task-summary-side {
-  flex-shrink: 0;
+  gap: 10px;
 }
 
 .task-title-input {
+  flex: 1;
   border: none;
   background: transparent;
-  min-height: auto;
+  font-weight: 500;
+  font-size: 15px;
+  color: #1e2f41;
   padding: 0;
-  color: #0f172a;
-  font-size: 18px;
-  font-weight: 700;
-  box-shadow: none;
+  outline: none;
 }
 
-.task-title-input:focus {
-  box-shadow: none;
+.task-title-input.completed {
+  text-decoration: line-through;
+  color: #92a1bc;
 }
 
-.task-time-pill {
-  padding: 6px 10px;
+.task-tag {
+  font-size: 11px;
+  background: #f0f3fa;
+  padding: 4px 10px;
   border-radius: 999px;
-  background: rgba(37, 99, 235, 0.08);
-  color: #1d4ed8;
-  font-size: 12px;
-  font-weight: 700;
+  color: #4a6085;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
-.task-expand-indicator {
-  font-size: 12px;
-  font-weight: 700;
+.delete-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: #b7c2da;
+  font-size: 20px;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 999px;
+}
+
+.delete-btn:hover {
+  color: #e25c5c;
+  background: #fff3f0;
 }
 
 .task-detail-panel {
-  padding: 0 18px 18px;
-  border-top: 1px solid rgba(148, 163, 184, 0.14);
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid #eef2fa;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
-.link-button {
-  padding: 0;
-  background: transparent;
-  color: #dc2626;
+.detail-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.detail-field span,
+.tool-title {
+  font-size: 12px;
+  color: #5a6e8a;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.detail-field input,
+.detail-field select {
+  min-height: 42px;
+  padding: 0 14px;
+}
+
+.detail-field textarea {
+  padding: 12px 14px;
+  resize: vertical;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 36px 20px;
+  background: #fafcff;
+  border-radius: 28px;
+  color: #8698b5;
+  font-weight: 500;
+}
+
+.empty-state strong {
+  display: block;
+  margin-bottom: 8px;
+  color: #4a5b7a;
+}
+
+.empty-state p {
+  margin: 0;
+}
+
+.tool-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: 16px;
+  padding: 0 28px 28px;
+}
+
+.tool-card {
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 24px;
+  padding: 18px;
+  border: 1px solid #eef2fa;
+}
+
+.tool-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.tool-header h2 {
+  margin: 4px 0 0;
+  font-size: 18px;
+  color: #1f2b48;
+}
+
+.secondary-btn {
+  background: #eef2fa;
+  color: #2c3e66;
+}
+
+.date-list,
+.manual-date-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.date-item {
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: #fff;
+  color: #2c3e66;
+  padding: 10px 12px;
+  border-radius: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid #eef2fa;
+}
+
+.date-item.active {
+  background: #2c3e66;
+  color: #fff;
+}
+
+.export-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.compact-field {
+  margin-top: 10px;
+}
+
+.manual-date-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: #4a5b7a;
+}
+
+.tool-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+
+.status-pill {
+  background: #eef2ff;
+  color: #2c3e66;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 12px;
   font-weight: 700;
 }
 
-@media (max-width: 960px) {
-  .daily-plan-page {
-    padding: 14px;
-  }
-
-  .hero-card {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .date-card {
-    min-width: 0;
-    width: 100%;
-  }
-
-  .toolbar-grid,
-  .content-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
 @media (max-width: 720px) {
-  .task-summary {
-    flex-direction: column;
-    align-items: flex-start;
+  .daily-plan-page {
+    padding: 16px 12px;
   }
 
-  .task-summary-side {
-    width: 100%;
-    justify-content: space-between;
+  .stats,
+  .tool-grid,
+  .export-grid {
+    grid-template-columns: 1fr;
+    display: grid;
+  }
+
+  .stats {
+    gap: 10px;
+  }
+
+  .add-task {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .task-row,
+  .tool-header,
+  .tool-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .task-tag {
+    align-self: flex-start;
   }
 }
 </style>
