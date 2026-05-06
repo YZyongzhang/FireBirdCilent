@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-
+import axios from 'axios'
 const router = useRouter()
 const username = ref('')
 const password = ref('')
@@ -17,14 +17,27 @@ const errorMessage = ref('')
 //   })
 // }
 
-const handleSubmit = () => {
-  if (username.value === 'admin' && password.value === '123456') {
-    errorMessage.value = ''
-    router.push('/home')
-    return
-  }
+const handleSubmit = async () => {
+  try {
+    // 向后端POST发JSON
+    const res = await axios.post(
+      'http://localhost:8080/login',  // 后端接口地址
+      {                                // 这就是 RequestBody
+        username: username.value,
+        password: password.value
+      }
+    )
+    if (res.data == "成功"){
+      router.push('/home')
+    }else{
+      alert("账号密码错误")
+    }
+    console.log('后端返回：', res.data)
 
-  errorMessage.value = '账号或密码错误，请使用 admin / 123456 登录。'
+  } catch (error) {
+    // 失败进入这里
+    errorMessage.value = '账号或密码错误'
+  }
 }
 </script>
 
