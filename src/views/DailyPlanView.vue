@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, onMounted } from 'vue'
+import axios from 'axios'
+import { API_BASE } from '../config'
 
 interface DailyTask {
   id: string
@@ -14,8 +16,6 @@ interface DailyPlan {
   completed: boolean
   tasks: DailyTask[]
 }
-
-const storageKey = 'firebird-daily-plans'
 
 const createId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 const formatDateKey = (date: Date) => date.toISOString().slice(0, 10)
@@ -32,9 +32,7 @@ const createPlan = (date: string): DailyPlan => ({
   tasks: createDefaultTasks(),
 })
 
-const plansByDate = ref<Record<string, DailyPlan>>({
-  [todayKey]: createPlan(todayKey),
-})
+const plansByDate = ref<Record<string, DailyPlan>>({})
 const selectedDate = ref(todayKey)
 const exportFormat = ref<'markdown' | 'json'>('markdown')
 const exportMode = ref<'single' | 'range' | 'manual'>('single')
@@ -44,23 +42,42 @@ const manualSelectedDates = ref<string[]>([todayKey])
 const expandedTaskId = ref('')
 const quickTaskTitle = ref('')
 
-const loadState = () => {
-  const stored = localStorage.getItem(storageKey)
-
-  if (!stored) {
-    return
-  }
-
-  const parsed = JSON.parse(stored) as {
-    plansByDate?: Record<string, DailyPlan>
-  }
-
-  if (parsed.plansByDate && Object.keys(parsed.plansByDate).length) {
-    plansByDate.value = parsed.plansByDate
+// Backend sync: fetch all plans from API
+const fetchAllPlans = async () => {
+  try {
+    const res = await axios.get(`${API_BASE}/daily-plans`)
+    // Expecting an array of DailyPlan
+    const list: DailyPlan[] = res.data || []
+    const map: Record<string, DailyPlan> = {}
+    list.forEach((p) => (map[p.date] = p))
+    // ensure today exists
+    if (!map[todayKey]) map[todayKey] = createPlan(todayKey)
+    plansByDate.value = map
+    // select fallback if needed
+    if (!plansByDate.value[selectedDate.value]) {
+      selectedDate.value = Object.keys(plansByDate.value).sort()[0] ?? todayKey
+    }
+  } catch (err) {
+    // fallback to local default when backend unavailable
+    plansByDate.value = { [todayKey]: createPlan(todayKey) }
   }
 }
 
-loadState()
+const fetchPlan = async (date: string) => {
+  try {
+    const res = await axios.get(`${API_BASE}/daily-plans/${date}`)
+    const plan: DailyPlan = res.data
+    if (plan) {
+      plansByDate.value = { ...plansByDate.value, [date]: plan }
+    }
+  } catch (err) {
+    // ignore
+  }
+}
+
+onMounted(() => {
+  fetchAllPlans()
+})
 
 const sortedDates = computed(() => Object.keys(plansByDate.value).sort((left, right) => left.localeCompare(right)))
 
@@ -98,18 +115,7 @@ const formattedSelectedDate = computed(() => {
   })
 })
 
-watch(
-  plansByDate,
-  () => {
-    localStorage.setItem(
-      storageKey,
-      JSON.stringify({
-        plansByDate: plansByDate.value,
-      }),
-    )
-  },
-  { deep: true, immediate: true },
-)
+// Note: persistence moved to backend via API calls below
 
 watch(
   currentPlan,
@@ -145,21 +151,30 @@ const selectDate = (date: string) => {
   selectedDate.value = date
 }
 
-const createDatePlan = () => {
-  ensurePlan(selectedDate.value)
+const createDatePlan = async () => {
+  try {
+    await axios.post(`${API_BASE}/daily-plans`, { date: selectedDate.value })
+    await fetchPlan(selectedDate.value)
+  } catch (err) {
+    // fallback locally
+    ensurePlan(selectedDate.value)
+  }
 }
 
-const toggleDayCompleted = () => {
-  if (!currentPlan.value) {
-    return
-  }
-
-  plansByDate.value = {
-    ...plansByDate.value,
-    [selectedDate.value]: {
-      ...currentPlan.value,
-      completed: !currentPlan.value.completed,
-    },
+const toggleDayCompleted = async () => {
+  if (!currentPlan.value) return
+  try {
+    await axios.post(`${API_BASE}/daily-plans/${selectedDate.value}/toggle`)
+    await fetchPlan(selectedDate.value)
+  } catch (err) {
+    // optimistic fallback
+    plansByDate.value = {
+      ...plansByDate.value,
+      [selectedDate.value]: {
+        ...currentPlan.value,
+        completed: !currentPlan.value.completed,
+      },
+    }
   }
 }
 
@@ -167,17 +182,20 @@ const toggleTaskExpanded = (taskId: string) => {
   expandedTaskId.value = expandedTaskId.value === taskId ? '' : taskId
 }
 
-const updateTask = (taskId: string, patch: Partial<DailyTask>) => {
-  if (!currentPlan.value) {
-    return
-  }
-
-  plansByDate.value = {
-    ...plansByDate.value,
-    [selectedDate.value]: {
-      ...currentPlan.value,
-      tasks: currentPlan.value.tasks.map((task) => (task.id === taskId ? { ...task, ...patch } : task)),
-    },
+const updateTask = async (taskId: string, patch: Partial<DailyTask>) => {
+  if (!currentPlan.value) return
+  try {
+    await axios.patch(`${API_BASE}/daily-plans/${selectedDate.value}/tasks/${taskId}`, patch)
+    await fetchPlan(selectedDate.value)
+  } catch (err) {
+    // optimistic local update
+    plansByDate.value = {
+      ...plansByDate.value,
+      [selectedDate.value]: {
+        ...currentPlan.value,
+        tasks: currentPlan.value.tasks.map((task) => (task.id === taskId ? { ...task, ...patch } : task)),
+      },
+    }
   }
 }
 
@@ -189,51 +207,48 @@ const createTask = (title: string) => ({
   note: '',
 })
 
-const addTask = (title = '新的计划事项') => {
-  if (!currentPlan.value) {
-    return
+const addTask = async (title = '新的计划事项') => {
+  if (!currentPlan.value) return
+  try {
+    await axios.post(`${API_BASE}/daily-plans/${selectedDate.value}/tasks`, { title })
+    await fetchPlan(selectedDate.value)
+    expandedTaskId.value = ''
+  } catch (err) {
+    // fallback local add
+    const newTask = createTask(title)
+    plansByDate.value = {
+      ...plansByDate.value,
+      [selectedDate.value]: {
+        ...currentPlan.value,
+        tasks: [...currentPlan.value.tasks, newTask],
+      },
+    }
+    expandedTaskId.value = newTask.id
   }
-
-  const newTask = createTask(title)
-
-  plansByDate.value = {
-    ...plansByDate.value,
-    [selectedDate.value]: {
-      ...currentPlan.value,
-      tasks: [...currentPlan.value.tasks, newTask],
-    },
-  }
-  expandedTaskId.value = newTask.id
 }
 
 const addQuickTask = () => {
   const title = quickTaskTitle.value.trim()
-
-  if (!title) {
-    return
-  }
-
+  if (!title) return
   addTask(title)
   quickTaskTitle.value = ''
 }
 
-const removeTask = (taskId: string) => {
-  if (!currentPlan.value) {
-    return
-  }
-
-  const nextTasks = currentPlan.value.tasks.filter((task) => task.id !== taskId)
-
-  plansByDate.value = {
-    ...plansByDate.value,
-    [selectedDate.value]: {
-      ...currentPlan.value,
-      tasks: nextTasks,
-    },
-  }
-
-  if (expandedTaskId.value === taskId) {
-    expandedTaskId.value = nextTasks[0]?.id ?? ''
+const removeTask = async (taskId: string) => {
+  if (!currentPlan.value) return
+  try {
+    await axios.delete(`${API_BASE}/daily-plans/${selectedDate.value}/tasks/${taskId}`)
+    await fetchPlan(selectedDate.value)
+  } catch (err) {
+    const nextTasks = currentPlan.value.tasks.filter((task) => task.id !== taskId)
+    plansByDate.value = {
+      ...plansByDate.value,
+      [selectedDate.value]: {
+        ...currentPlan.value,
+        tasks: nextTasks,
+      },
+    }
+    if (expandedTaskId.value === taskId) expandedTaskId.value = nextTasks[0]?.id ?? ''
   }
 }
 
