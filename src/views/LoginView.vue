@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { API_BASE } from '../config'
@@ -19,7 +19,7 @@ const handleAccountLogin = async () => {
       username: username.value,
       password: password.value,
     })
-    if (res.data === '成功') {
+    if (res.data.status === 'ok') {
       router.push('/home')
     } else {
       errorMessage.value = res.data?.message || '账号或密码错误'
@@ -45,7 +45,7 @@ const handleRegister = async () => {
       password: regPassword.value,
       email: regEmail.value,
     })
-    if (res.data === '注册成功') {
+    if (res.data.status === 'ok') {
       router.push('/login')
     } else {
       errorMessage.value = res.data?.message || '注册失败'
@@ -70,26 +70,84 @@ const sendSmsCode = async () => {
 const handleSmsLogin = async () => {
   try {
     const res = await axios.post(`${API_BASE}/login/sms`, { phone: phone.value, code: smsCode.value })
-    if (res.data === '成功') router.push('/home')
+    if (res.data.status === 'ok') router.push('/home')
     else errorMessage.value = res.data?.message || '短信登录失败'
   } catch (err) {
     errorMessage.value = '短信登录失败'
   }
 }
 
-// 二维码登录 (前端占位实现，真实需后端配合)
+// 二维码登录：后端返回 PNG（二进制）并在响应头带上 X-Session-Id
 const qrCodeUrl = ref('')
-const qrStatus = ref<'idle' | 'scanned' | 'confirmed'>('idle')
+const qrStatus = ref<'waiting' | 'scanned' | 'confirmed' | 'error'>('waiting')
+const qrSessionId = ref('')
+let pollTimer: ReturnType<typeof setInterval> | null = null
+
+const stopPolling = () => {
+  if (pollTimer !== null) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+}
+
+const startPolling = () => {
+  if (!qrSessionId.value) return
+  stopPolling()
+  pollTimer = setInterval(async () => {
+    try {
+      const res = await axios.get(`${API_BASE}/login/qr/status`, { params: { sessionId: qrSessionId.value } })
+      // 兼容后端返回结构：{ status:"ok", message:"", data:{ status: "waiting" } }
+      const status = res.data?.data?.status || res.data?.status || 'waiting'
+      qrStatus.value = status
+      if (status === 'confirmed') {
+        stopPolling()
+        router.push('/home')
+      }
+    } catch (err) {
+      // 忽略单次轮询错误，稍后继续
+    }
+  }, 2000)
+}
+
+// initQr: 请求二维码 PNG（二进制），从响应头读取 X-Session-Id，展示图片并开始轮询
 const initQr = async () => {
   try {
-    const res = await axios.get(`${API_BASE}/login/qr`) // 返回二维码地址或id
-    qrCodeUrl.value = res.data?.qr || ''
-    qrStatus.value = 'idle'
-    // 可在此处实现轮询状态（示例不自动轮询以保持简单）
+    const res = await axios.get(`${API_BASE}/login/qr`, { responseType: 'blob' })
+    const sessionId = res.headers['x-session-id'] || res.headers['X-Session-Id'] || ''
+    qrSessionId.value = sessionId
+
+    // 释放上一个 URL（如果存在）
+    if (qrCodeUrl.value) URL.revokeObjectURL(qrCodeUrl.value)
+
+    const blob = res.data as Blob
+    const url = URL.createObjectURL(blob)
+    qrCodeUrl.value = url
+    qrStatus.value = 'waiting'
+    // 开始轮询状态
+    startPolling()
   } catch (err) {
+    qrStatus.value = 'error'
     errorMessage.value = '无法生成二维码'
   }
 }
+
+// 清理
+watch(mode, (n) => {
+  if (n !== 'qr') {
+    stopPolling()
+    if (qrCodeUrl.value) {
+      URL.revokeObjectURL(qrCodeUrl.value)
+      qrCodeUrl.value = ''
+    }
+    qrSessionId.value = ''
+    qrStatus.value = 'waiting'
+  }
+})
+
+onUnmounted(() => {
+  stopPolling()
+  if (qrCodeUrl.value) URL.revokeObjectURL(qrCodeUrl.value)
+})
 </script>
 
 <template>
