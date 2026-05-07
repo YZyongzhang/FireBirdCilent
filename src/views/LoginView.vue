@@ -148,6 +148,7 @@ onUnmounted(() => {
   stopPolling()
   if (qrCodeUrl.value) URL.revokeObjectURL(qrCodeUrl.value)
 })
+
 </script>
 
 <template>
