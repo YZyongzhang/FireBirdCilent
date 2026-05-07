@@ -3,31 +3,91 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { API_BASE } from '../config'
+
 const router = useRouter()
-const username = ref('')
-const password = ref('')
+
+// 通用状态
+const mode = ref<'account' | 'sms' | 'qr' | 'register'>('account')
 const errorMessage = ref('')
 
-const handleSubmit = async () => {
+// 账号密码登录
+const username = ref('')
+const password = ref('')
+const handleAccountLogin = async () => {
   try {
-    // 向后端POST发JSON
-    const res = await axios.post(
-      `${API_BASE}/login`,  // 后端接口地址（统一管理）
-      {                                // 这就是 RequestBody
-        username: username.value,
-        password: password.value
-      }
-    )
-    if (res.data == "成功"){
+    const res = await axios.post(`${API_BASE}/login`, {
+      username: username.value,
+      password: password.value,
+    })
+    if (res.data === '成功') {
       router.push('/home')
-    }else{
-      alert("账号密码错误")
+    } else {
+      errorMessage.value = res.data?.message || '账号或密码错误'
     }
-    console.log('后端返回：', res.data)
-
-  } catch (error) {
-    // 失败进入这里
+  } catch (err) {
     errorMessage.value = '账号或密码错误'
+  }
+}
+
+// 注册
+const regUsername = ref('')
+const regPassword = ref('')
+const regConfirm = ref('')
+const regEmail = ref('')
+const handleRegister = async () => {
+  if (regPassword.value !== regConfirm.value) {
+    errorMessage.value = '两次输入的密码不一致'
+    return
+  }
+  try {
+    const res = await axios.post(`${API_BASE}/register`, {
+      username: regUsername.value,
+      password: regPassword.value,
+      email: regEmail.value,
+    })
+    if (res.data === '注册成功') {
+      router.push('/login')
+    } else {
+      errorMessage.value = res.data?.message || '注册失败'
+    }
+  } catch (err) {
+    errorMessage.value = '注册失败'
+  }
+}
+
+// 短信登录
+const phone = ref('')
+const smsCode = ref('')
+const smsSent = ref(false)
+const sendSmsCode = async () => {
+  try {
+    await axios.post(`${API_BASE}/send-sms`, { phone: phone.value })
+    smsSent.value = true
+  } catch (err) {
+    errorMessage.value = '发送短信失败'
+  }
+}
+const handleSmsLogin = async () => {
+  try {
+    const res = await axios.post(`${API_BASE}/login/sms`, { phone: phone.value, code: smsCode.value })
+    if (res.data === '成功') router.push('/home')
+    else errorMessage.value = res.data?.message || '短信登录失败'
+  } catch (err) {
+    errorMessage.value = '短信登录失败'
+  }
+}
+
+// 二维码登录 (前端占位实现，真实需后端配合)
+const qrCodeUrl = ref('')
+const qrStatus = ref<'idle' | 'scanned' | 'confirmed'>('idle')
+const initQr = async () => {
+  try {
+    const res = await axios.get(`${API_BASE}/login/qr`) // 返回二维码地址或id
+    qrCodeUrl.value = res.data?.qr || ''
+    qrStatus.value = 'idle'
+    // 可在此处实现轮询状态（示例不自动轮询以保持简单）
+  } catch (err) {
+    errorMessage.value = '无法生成二维码'
   }
 }
 </script>
@@ -37,11 +97,20 @@ const handleSubmit = async () => {
     <section class="login-card">
       <div class="login-header">
         <p class="login-badge">FireBird Client</p>
-        <h1>欢迎登录</h1>
-        <p class="login-description">请输入账号和密码进入系统。</p>
+        <h1 v-if="mode === 'register'">创建账号</h1>
+        <h1 v-else>欢迎登录</h1>
+        <p class="login-description">请选择登录方式：账号/短信/二维码 或 注册新账号。</p>
       </div>
 
-      <form class="login-form" @submit.prevent="handleSubmit">
+      <nav class="auth-tabs">
+        <button :class="{active: mode === 'account'}" @click="mode = 'account'">账号登录</button>
+        <button :class="{active: mode === 'sms'}" @click="mode = 'sms'">短信登录</button>
+        <button :class="{active: mode === 'qr'}" @click="(mode = 'qr', initQr())">二维码登录</button>
+        <button :class="{active: mode === 'register'}" @click="mode = 'register'">注册</button>
+      </nav>
+
+      <!-- 账号密码登录 -->
+      <form v-if="mode === 'account'" class="login-form" @submit.prevent="handleAccountLogin">
         <label class="form-item">
           <span>用户名</span>
           <input v-model="username" type="text" placeholder="请输入用户名" />
@@ -56,6 +125,64 @@ const handleSubmit = async () => {
 
         <button type="submit">登录</button>
       </form>
+
+      <!-- 短信登录 -->
+      <form v-if="mode === 'sms'" class="login-form" @submit.prevent="handleSmsLogin">
+        <label class="form-item">
+          <span>手机号</span>
+          <input v-model="phone" type="tel" placeholder="请输入手机号" />
+        </label>
+
+        <div class="sms-row">
+          <label class="form-item" style="flex:1;">
+            <span>验证码</span>
+            <input v-model="smsCode" type="text" placeholder="输入收到的验证码" />
+          </label>
+          <button type="button" class="send-code" @click="sendSmsCode">{{ smsSent ? '已发送' : '发送验证码' }}</button>
+        </div>
+
+        <p v-if="errorMessage" class="error-message">{{ errorMessage }}</p>
+
+        <button type="submit">短信登录</button>
+      </form>
+
+      <!-- 二维码登录 -->
+      <div v-if="mode === 'qr'" class="qr-area">
+        <p>使用移动端扫码登录：</p>
+        <div class="qr-box">
+          <img v-if="qrCodeUrl" :src="qrCodeUrl" alt="二维码" />
+          <div v-else class="qr-placeholder">二维码加载中</div>
+        </div>
+        <p v-if="qrStatus === 'scanned'">已扫码，等待确认…</p>
+      </div>
+
+      <!-- 注册 -->
+      <form v-if="mode === 'register'" class="login-form" @submit.prevent="handleRegister">
+        <label class="form-item">
+          <span>用户名</span>
+          <input v-model="regUsername" type="text" placeholder="请输入用户名" />
+        </label>
+
+        <label class="form-item">
+          <span>邮箱（可选）</span>
+          <input v-model="regEmail" type="email" placeholder="请输入邮箱" />
+        </label>
+
+        <label class="form-item">
+          <span>密码</span>
+          <input v-model="regPassword" type="password" placeholder="请输入密码" />
+        </label>
+
+        <label class="form-item">
+          <span>确认密码</span>
+          <input v-model="regConfirm" type="password" placeholder="再次输入密码" />
+        </label>
+
+        <p v-if="errorMessage" class="error-message">{{ errorMessage }}</p>
+
+        <button type="submit">注册</button>
+      </form>
+
     </section>
   </main>
 </template>
