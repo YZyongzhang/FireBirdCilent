@@ -2,26 +2,17 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
+import { API_BASE } from '../config'
 const router = useRouter()
 const username = ref('')
 const password = ref('')
 const errorMessage = ref('')
 
-// const loginApi = async (payload: { username: string; password: string }) => {
-//   return fetch('/api/login', {
-//     method: 'POST',
-//     headers: {
-//       'Content-Type': 'application/json',
-//     },
-//     body: JSON.stringify(payload),
-//   })
-// }
-
 const handleSubmit = async () => {
   try {
     // 向后端POST发JSON
     const res = await axios.post(
-      'http://localhost:8080/login',  // 后端接口地址
+      `${API_BASE}/login`,  // 后端接口地址（统一管理）
       {                                // 这就是 RequestBody
         username: username.value,
         password: password.value
