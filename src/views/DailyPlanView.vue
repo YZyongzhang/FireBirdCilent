@@ -3,14 +3,6 @@ import { computed, ref, watch, onMounted } from 'vue'
 import axios from 'axios'
 import { API_BASE } from '../config'
 
-// Helper to provide X-User-Id header expected by backend controller
-const getUserIdHeader = () => {
-  // prefer explicit stored user id, fallback to 1 for local dev
-  const stored = localStorage.getItem('userId')
-  const id = stored ? Number(stored) : 1
-  return { headers: { 'X-User-Id': id } }
-}
-
 interface DailyTask {
   id: string
   title: string
@@ -53,7 +45,7 @@ const quickTaskTitle = ref('')
 // Backend sync: fetch all plans from API
 const fetchAllPlans = async () => {
   try {
-    const res = await axios.get(`${API_BASE}/daily-plans`, getUserIdHeader())
+    const res = await axios.get(`${API_BASE}/daily-plans`)
     // Expecting an array of DailyPlan
     const list: DailyPlan[] = res.data || []
     const map: Record<string, DailyPlan> = {}
@@ -73,7 +65,7 @@ const fetchAllPlans = async () => {
 
 const fetchPlan = async (date: string) => {
   try {
-    const res = await axios.get(`${API_BASE}/daily-plans/${date}`, getUserIdHeader())
+    const res = await axios.get(`${API_BASE}/daily-plans/${date}`)
     const plan: DailyPlan = res.data
     if (plan) {
       plansByDate.value = { ...plansByDate.value, [date]: plan }
@@ -161,7 +153,7 @@ const selectDate = (date: string) => {
 
 const createDatePlan = async () => {
   try {
-    await axios.post(`${API_BASE}/daily-plans`, { date: selectedDate.value }, getUserIdHeader())
+    await axios.post(`${API_BASE}/daily-plans`, { date: selectedDate.value })
     await fetchPlan(selectedDate.value)
   } catch (err) {
     // fallback locally
@@ -172,7 +164,7 @@ const createDatePlan = async () => {
 const toggleDayCompleted = async () => {
   if (!currentPlan.value) return
   try {
-    await axios.post(`${API_BASE}/daily-plans/${selectedDate.value}/toggle`, null, getUserIdHeader())
+    await axios.post(`${API_BASE}/daily-plans/${selectedDate.value}/toggle`)
     await fetchPlan(selectedDate.value)
   } catch (err) {
     // optimistic fallback
@@ -193,7 +185,7 @@ const toggleTaskExpanded = (taskId: string) => {
 const updateTask = async (taskId: string, patch: Partial<DailyTask>) => {
   if (!currentPlan.value) return
   try {
-    await axios.patch(`${API_BASE}/daily-plans/${selectedDate.value}/tasks/${taskId}`, patch, getUserIdHeader())
+    await axios.patch(`${API_BASE}/daily-plans/${selectedDate.value}/tasks/${taskId}`, patch)
     await fetchPlan(selectedDate.value)
   } catch (err) {
     // optimistic local update
@@ -216,9 +208,12 @@ const createTask = (title: string) => ({
 })
 
 const addTask = async (title = '新的计划事项') => {
+
   if (!currentPlan.value) return
+
   try {
-    await axios.post(`${API_BASE}/daily-plans/${selectedDate.value}/tasks`, { title }, getUserIdHeader())
+
+    await axios.post(`${API_BASE}/daily-plans/${selectedDate.value}/tasks`, { title })
     await fetchPlan(selectedDate.value)
     expandedTaskId.value = ''
   } catch (err) {
@@ -245,7 +240,7 @@ const addQuickTask = () => {
 const removeTask = async (taskId: string) => {
   if (!currentPlan.value) return
   try {
-    await axios.delete(`${API_BASE}/daily-plans/${selectedDate.value}/tasks/${taskId}`, getUserIdHeader())
+    await axios.delete(`${API_BASE}/daily-plans/${selectedDate.value}/tasks/${taskId}`)
     await fetchPlan(selectedDate.value)
   } catch (err) {
     const nextTasks = currentPlan.value.tasks.filter((task) => task.id !== taskId)
@@ -370,6 +365,8 @@ const exportPlans = () => {
           placeholder="写一个计划，比如“完成报告”或“晨跑 30 分钟”"
           @keyup.enter="addQuickTask"
         />
+      
+
         <button type="button" @click="addQuickTask">添加计划</button>
       </section>
 
