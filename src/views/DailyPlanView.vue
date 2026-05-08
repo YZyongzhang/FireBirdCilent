@@ -46,8 +46,12 @@ const quickTaskTitle = ref('')
 const fetchAllPlans = async () => {
   try {
     const res = await axios.get(`${API_BASE}/daily-plans`)
-    // Expecting an array of DailyPlan
-    const list: DailyPlan[] = res.data || []
+    // backend may return either the raw array or an ApiResponse wrapper
+    let list: DailyPlan[] = []
+    if (Array.isArray(res.data)) list = res.data
+    else if (res.data && Array.isArray(res.data.data)) list = res.data.data
+    else if (res.data && res.data.status === 'ok' && Array.isArray(res.data.data)) list = res.data.data
+
     const map: Record<string, DailyPlan> = {}
     list.forEach((p) => (map[p.date] = p))
     // ensure today exists
@@ -66,7 +70,12 @@ const fetchAllPlans = async () => {
 const fetchPlan = async (date: string) => {
   try {
     const res = await axios.get(`${API_BASE}/daily-plans/${date}`)
-    const plan: DailyPlan = res.data
+    // backend may return raw plan or ApiResponse wrapper
+    let plan: DailyPlan | null = null
+    if (res.data && res.data.date) plan = res.data
+    else if (res.data && res.data.data && res.data.data.date) plan = res.data.data
+    else if (res.data && res.data.status === 'ok' && res.data.data && res.data.data.date) plan = res.data.data
+
     if (plan) {
       plansByDate.value = { ...plansByDate.value, [date]: plan }
     }
@@ -151,16 +160,6 @@ const selectDate = (date: string) => {
   selectedDate.value = date
 }
 
-const createDatePlan = async () => {
-  try {
-    await axios.post(`${API_BASE}/daily-plans`, { date: selectedDate.value })
-    await fetchPlan(selectedDate.value)
-  } catch (err) {
-    // fallback locally
-    ensurePlan(selectedDate.value)
-  }
-}
-
 const toggleDayCompleted = async () => {
   if (!currentPlan.value) return
   try {
@@ -185,6 +184,7 @@ const toggleTaskExpanded = (taskId: string) => {
 const updateTask = async (taskId: string, patch: Partial<DailyTask>) => {
   if (!currentPlan.value) return
   try {
+    console.log('进入updatatask')
     await axios.patch(`${API_BASE}/daily-plans/${selectedDate.value}/tasks/${taskId}`, patch)
     await fetchPlan(selectedDate.value)
   } catch (err) {
@@ -288,11 +288,11 @@ const buildMarkdown = (plans: DailyPlan[]) => {
 
       const tasks = plan.tasks.length
         ? plan.tasks
-            .map(
-              (task) =>
-                `- [${task.done ? 'x' : ' '}] ${task.title}${task.time ? `（${task.time}）` : ''}${task.note ? `\n  - 说明：${task.note}` : ''}`,
-            )
-            .join('\n')
+          .map(
+            (task) =>
+              `- [${task.done ? 'x' : ' '}] ${task.title}${task.time ? `（${task.time}）` : ''}${task.note ? `\n  - 说明：${task.note}` : ''}`,
+          )
+          .join('\n')
         : '- 暂无计划'
 
       return `## ${title}\n\n- 日期计划完成：${plan.completed ? '是' : '否'}\n\n${tasks}`
@@ -359,13 +359,9 @@ const exportPlans = () => {
       </section>
 
       <section class="add-task">
-        <input
-          v-model="quickTaskTitle"
-          type="text"
-          placeholder="写一个计划，比如“完成报告”或“晨跑 30 分钟”"
-          @keyup.enter="addQuickTask"
-        />
-      
+        <input v-model="quickTaskTitle" type="text" placeholder="写一个计划，比如“完成报告”或“晨跑 30 分钟”"
+          @keyup.enter="addQuickTask" />
+
 
         <button type="button" @click="addQuickTask">添加计划</button>
       </section>
@@ -377,27 +373,26 @@ const exportPlans = () => {
         </div>
 
         <div class="tasks">
-          <article
-            v-for="task in currentPlan?.tasks ?? []"
-            :key="task.id"
-            class="task-item"
+          <article v-for="task in currentPlan?.tasks ?? []" :key="task.id" class="task-item"
             :class="{ completed: task.done, expanded: expandedTaskId === task.id }"
-            @click="toggleTaskExpanded(task.id)"
-          >
-            <button type="button" class="task-check" :class="{ completed: task.done }" @click.stop="updateTask(task.id, { done: !task.done })">
+            @click="toggleTaskExpanded(task.id)">
+            <button type="button" class="task-check" :class="{ completed: task.done }"
+              @click.stop="updateTask(task.id, { done: !task.done })">
               {{ task.done ? '✓' : '' }}
             </button>
 
             <div class="task-main">
               <div class="task-row">
-                <input
+                <!-- <input
                   class="task-title-input"
                   :class="{ completed: task.done }"
                   :value="task.title"
                   type="text"
                   @click.stop
                   @input="updateTask(task.id, { title: ($event.target as HTMLInputElement).value })"
-                />
+                /> -->
+                <input v-model="task.title" class="task-title-input" :class="{ completed: task.done }" type="text"
+                  @click.stop @blur="updateTask(task.id, { title: task.title })" />
                 <span class="task-tag">{{ task.time || '未设置时间' }}</span>
                 <button type="button" class="delete-btn" @click.stop="removeTask(task.id)">×</button>
               </div>
@@ -405,22 +400,26 @@ const exportPlans = () => {
               <div v-if="expandedTaskId === task.id" class="task-detail-panel" @click.stop>
                 <label class="detail-field">
                   <span>时间安排</span>
-                  <input
+                  <!-- <input
                     :value="task.time"
                     type="text"
                     placeholder="例如 10:00 - 11:00"
                     @input="updateTask(task.id, { time: ($event.target as HTMLInputElement).value })"
-                  />
+                  /> -->
+                  <input v-model="task.time" type="text" placeholder="例如 10:00 - 11:00"
+                    @blur="updateTask(task.id, { time: task.time })" />
                 </label>
 
                 <label class="detail-field">
                   <span>补充说明</span>
-                  <textarea
+                  <!-- <textarea
                     :value="task.note"
                     rows="4"
                     placeholder="写下这项计划的备注说明..."
                     @input="updateTask(task.id, { note: ($event.target as HTMLTextAreaElement).value })"
-                  ></textarea>
+                  ></textarea> -->
+                  <textarea v-model="task.note" rows="4" placeholder="写下这项计划的备注说明..."
+                    @blur="updateTask(task.id, { note: task.note })" />
                 </label>
               </div>
             </div>
@@ -434,33 +433,6 @@ const exportPlans = () => {
       </section>
 
       <section class="tool-grid">
-        <article class="tool-card">
-          <div class="tool-header">
-            <div>
-              <p class="tool-title">日期计划</p>
-              <h2>选择与创建</h2>
-            </div>
-            <button type="button" class="secondary-btn" @click="createDatePlan">创建</button>
-          </div>
-
-          <label class="detail-field compact-field">
-            <span>日期</span>
-            <input :value="selectedDate" type="date" @input="selectDate(($event.target as HTMLInputElement).value)" />
-          </label>
-
-          <div class="date-list">
-            <button
-              v-for="date in sortedDates"
-              :key="date"
-              type="button"
-              class="date-item"
-              :class="{ active: date === selectedDate }"
-              @click="selectDate(date)"
-            >
-              {{ date }}
-            </button>
-          </div>
-        </article>
 
         <article class="tool-card wide-card">
           <div class="tool-header">
