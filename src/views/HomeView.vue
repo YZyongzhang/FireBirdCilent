@@ -1,7 +1,11 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { getUser } from '../utils/auth'
 
 const router = useRouter()
+
+const user = ref(getUser())
 
 const cards = [
   {
@@ -35,7 +39,10 @@ const cards = [
       <div class="home-header-card">
         <p class="home-badge">FireBird Client</p>
         <h1>欢迎回来</h1>
-        <p class="home-description">保持登录页面的卡片风格，以下内容作为首页功能入口占位。</p>
+          <p class="home-description">保持登录页面的卡片风格，以下内容作为首页功能入口占位。</p>
+          <p class="profile-row">
+            用户名：{{ user?.username || '-' }} | ID：{{ user?.id || '-' }} | 角色：{{ user?.role || '-' }}
+          </p>
       </div>
 
       <section class="card-grid">

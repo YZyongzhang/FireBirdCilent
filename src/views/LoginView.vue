@@ -21,11 +21,24 @@ const handleAccountLogin = async () => {
       password: password.value,
     })
     if (res.data.status === 'ok') {
-      const user = res.data?.data?.user || res.data?.user || {
-        id: res.data?.data?.id || res.data?.id || Date.now(),
-        username: username.value,
-        password: password.value,
-        role: res.data?.data?.role || res.data?.role || 'user',
+      // 后端可能直接返回一个 data map: { id, username, role }
+      console.log(res.data)
+      const dataMap = res.data?.data
+      let user: any = null
+      if (dataMap && (dataMap.id || dataMap.username || dataMap.role)) {
+        user = {
+          id: dataMap.id,
+          username: dataMap.username,
+          role: dataMap.role || 'user',
+        }
+      } else if (res.data?.user) {
+        user = res.data.user
+      } else {
+        user = {
+          id: res.data?.id || Date.now(),
+          username: username.value,
+          role: res.data?.role || 'user',
+        }
       }
       saveUser(user)
       router.push('/home')
@@ -79,11 +92,22 @@ const handleSmsLogin = async () => {
   try {
     const res = await axios.post(`${API_BASE}/login/sms`, { phone: phone.value, code: smsCode.value })
     if (res.data.status === 'ok') {
-      const user = res.data?.data?.user || res.data?.user || {
-        id: res.data?.data?.id || res.data?.id || Date.now(),
-        username: phone.value,
-        password: '',
-        role: res.data?.data?.role || res.data?.role || 'user',
+      const dataMap = res.data?.data
+      let user: any = null
+      if (dataMap && (dataMap.id || dataMap.username || dataMap.role)) {
+        user = {
+          id: dataMap.id,
+          username: dataMap.username || phone.value,
+          role: dataMap.role || 'user',
+        }
+      } else if (res.data?.user) {
+        user = res.data.user
+      } else {
+        user = {
+          id: res.data?.id || Date.now(),
+          username: phone.value,
+          role: res.data?.role || 'user',
+        }
       }
       saveUser(user)
       router.push('/home')
@@ -120,7 +144,14 @@ const startPolling = () => {
         // try to obtain user info for this QR session and persist it
         try {
           const r = await axios.get(`${API_BASE}/login/qr/result`, { params: { sessionId: qrSessionId.value } })
-          const user = r.data?.data?.user || r.data?.user
+          // 后端可能返回 data map 或 user 对象
+          const dataMap = r.data?.data
+          let user: any = null
+          if (dataMap && (dataMap.id || dataMap.username || dataMap.role)) {
+            user = { id: dataMap.id, username: dataMap.username, role: dataMap.role }
+          } else if (r.data?.user) {
+            user = r.data.user
+          }
           if (user) saveUser(user)
           else {
             // fallback to a general /me endpoint
