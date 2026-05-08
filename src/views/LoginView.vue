@@ -3,6 +3,7 @@ import { ref, watch, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { API_BASE } from '../config'
+import { saveUser } from '../utils/auth'
 
 const router = useRouter()
 
@@ -20,6 +21,13 @@ const handleAccountLogin = async () => {
       password: password.value,
     })
     if (res.data.status === 'ok') {
+      const user = res.data?.data?.user || res.data?.user || {
+        id: res.data?.data?.id || res.data?.id || Date.now(),
+        username: username.value,
+        password: password.value,
+        role: res.data?.data?.role || res.data?.role || 'user',
+      }
+      saveUser(user)
       router.push('/home')
     } else {
       errorMessage.value = res.data?.message || '账号或密码错误'
@@ -70,8 +78,16 @@ const sendSmsCode = async () => {
 const handleSmsLogin = async () => {
   try {
     const res = await axios.post(`${API_BASE}/login/sms`, { phone: phone.value, code: smsCode.value })
-    if (res.data.status === 'ok') router.push('/home')
-    else errorMessage.value = res.data?.message || '短信登录失败'
+    if (res.data.status === 'ok') {
+      const user = res.data?.data?.user || res.data?.user || {
+        id: res.data?.data?.id || res.data?.id || Date.now(),
+        username: phone.value,
+        password: '',
+        role: res.data?.data?.role || res.data?.role || 'user',
+      }
+      saveUser(user)
+      router.push('/home')
+    } else errorMessage.value = res.data?.message || '短信登录失败'
   } catch (err) {
     errorMessage.value = '短信登录失败'
   }
@@ -101,6 +117,24 @@ const startPolling = () => {
       qrStatus.value = status
       if (status === 'confirmed') {
         stopPolling()
+        // try to obtain user info for this QR session and persist it
+        try {
+          const r = await axios.get(`${API_BASE}/login/qr/result`, { params: { sessionId: qrSessionId.value } })
+          const user = r.data?.data?.user || r.data?.user
+          if (user) saveUser(user)
+          else {
+            // fallback to a general /me endpoint
+            try {
+              const me = await axios.get(`${API_BASE}/me`)
+              const mu = me.data?.data?.user || me.data?.user
+              if (mu) saveUser(mu)
+            } catch (e) {
+              // ignore
+            }
+          }
+        } catch (e) {
+          // ignore
+        }
         router.push('/home')
       }
     } catch (err) {
