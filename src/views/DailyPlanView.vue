@@ -2,6 +2,7 @@
 import { computed, ref, watch, onMounted } from 'vue'
 import axios from 'axios'
 import { API_BASE } from '../config'
+import { getUser } from '../utils/auth'
 
 interface DailyTask {
   id: string
@@ -42,10 +43,20 @@ const manualSelectedDates = ref<string[]>([todayKey])
 const expandedTaskId = ref('')
 const quickTaskTitle = ref('')
 
+const getAuthHeaders = () => {
+  const u = getUser()
+  if (!u) return {}
+  return {
+    'X-User-Id': String(u.id),
+    'X-User-Username': u.username,
+    'X-User-Role': u.role,
+  }
+}
+
 // Backend sync: fetch all plans from API
 const fetchAllPlans = async () => {
   try {
-    const res = await axios.get(`${API_BASE}/daily-plans`)
+    const res = await axios.get(`${API_BASE}/daily-plans`, { headers: getAuthHeaders() })
     // backend may return either the raw array or an ApiResponse wrapper
     let list: DailyPlan[] = []
     if (Array.isArray(res.data)) list = res.data
@@ -69,7 +80,7 @@ const fetchAllPlans = async () => {
 
 const fetchPlan = async (date: string) => {
   try {
-    const res = await axios.get(`${API_BASE}/daily-plans/${date}`)
+    const res = await axios.get(`${API_BASE}/daily-plans/${date}`, { headers: getAuthHeaders() })
     // backend may return raw plan or ApiResponse wrapper
     let plan: DailyPlan | null = null
     if (res.data && res.data.date) plan = res.data
@@ -163,7 +174,7 @@ const selectDate = (date: string) => {
 const toggleDayCompleted = async () => {
   if (!currentPlan.value) return
   try {
-    await axios.post(`${API_BASE}/daily-plans/${selectedDate.value}/toggle`)
+    await axios.post(`${API_BASE}/daily-plans/${selectedDate.value}/toggle`, {}, { headers: getAuthHeaders() })
     await fetchPlan(selectedDate.value)
   } catch (err) {
     // optimistic fallback
@@ -185,10 +196,12 @@ const updateTask = async (taskId: string, patch: Partial<DailyTask>) => {
   if (!currentPlan.value) return
   try {
     console.log('进入updatatask')
-    await axios.patch(`${API_BASE}/daily-plans/${selectedDate.value}/tasks/${taskId}`, patch)
+    console.log('PATCH URL:', `${API_BASE}/daily-plans/${selectedDate.value}/tasks/${taskId}`)
+    await axios.patch(`${API_BASE}/daily-plans/${selectedDate.value}/tasks/${taskId}`, patch, { headers: getAuthHeaders() })
     await fetchPlan(selectedDate.value)
   } catch (err) {
     // optimistic local update
+    console.log('坏事了')
     plansByDate.value = {
       ...plansByDate.value,
       [selectedDate.value]: {
@@ -213,7 +226,7 @@ const addTask = async (title = '新的计划事项') => {
 
   try {
 
-    await axios.post(`${API_BASE}/daily-plans/${selectedDate.value}/tasks`, { title })
+    await axios.post(`${API_BASE}/daily-plans/${selectedDate.value}/tasks`, { title }, { headers: getAuthHeaders() })
     await fetchPlan(selectedDate.value)
     expandedTaskId.value = ''
   } catch (err) {
@@ -240,7 +253,7 @@ const addQuickTask = () => {
 const removeTask = async (taskId: string) => {
   if (!currentPlan.value) return
   try {
-    await axios.delete(`${API_BASE}/daily-plans/${selectedDate.value}/tasks/${taskId}`)
+    await axios.delete(`${API_BASE}/daily-plans/${selectedDate.value}/tasks/${taskId}`, { headers: getAuthHeaders() })
     await fetchPlan(selectedDate.value)
   } catch (err) {
     const nextTasks = currentPlan.value.tasks.filter((task) => task.id !== taskId)
