@@ -15,6 +15,12 @@ const cards = [
     onClick: () => router.push('/thoughts'),
   },
   {
+    title: '二手交易',
+    description: '发布与浏览二手商品的入口。',
+    actionText: '进入页面',
+    onClick: () => router.push('/secondhand'),
+  },
+  {
     title: '每日计划',
     description: '查看今天的安排、任务优先级和关键提醒，帮助你快速进入工作状态。',
     actionText: '进入页面',
