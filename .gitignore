@@ -37,3 +37,23 @@ __screenshots__/
 
 # Vite
 *.timestamp-*-*.mjs
+
+# Large binary/media files (added to prevent large commits)
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.7z
+*.exe
+*.msi
+*.apk
+*.iso
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.psd
+*.db
+*.sql
+*.bak
+/large_files/

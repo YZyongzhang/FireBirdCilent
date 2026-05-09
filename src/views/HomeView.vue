@@ -1,9 +1,15 @@
 <script setup lang="ts">
+<<<<<<< HEAD
 import { homeCards } from '@/dataset/home'
+=======
+import { ref } from 'vue'
+>>>>>>> 6c6f264bc2bbda5ae25d5e975363cac41984c874
 import { useRouter } from 'vue-router'
+import { getUser } from '../utils/auth'
 
 const router = useRouter()
 
+<<<<<<< HEAD
 const cards = homeCards.map((card) => {
   if (!card.route) {
     return {
@@ -19,6 +25,40 @@ const cards = homeCards.map((card) => {
     onClick: () => router.push(route),
   }
 })
+=======
+const user = ref(getUser())
+
+const cards = [
+  {
+    title: '个人思考记录',
+    description: '记录和整理你的个人想法、复盘和灵感。',
+    actionText: '进入页面',
+    onClick: () => router.push('/thoughts'),
+  },
+  {
+    title: '二手交易',
+    description: '发布与浏览二手商品的入口。',
+    actionText: '进入页面',
+    onClick: () => router.push('/secondhand'),
+  },
+  {
+    title: '每日计划',
+    description: '查看今天的安排、任务优先级和关键提醒，帮助你快速进入工作状态。',
+    actionText: '进入页面',
+    onClick: () => router.push('/daily-plan'),
+  },
+  {
+    title: '资料库占位',
+    description: '后续可以在这里收集常用资料、文档和外部链接。',
+    actionText: '敬请期待',
+  },
+  {
+    title: '灵感卡片占位',
+    description: '后续可以在这里扩展更多灵感内容和临时记录入口。',
+    actionText: '敬请期待',
+  },
+]
+>>>>>>> 6c6f264bc2bbda5ae25d5e975363cac41984c874
 </script>
 
 <template>
@@ -27,7 +67,10 @@ const cards = homeCards.map((card) => {
       <div class="home-header-card">
         <p class="home-badge">FireBird Client</p>
         <h1>欢迎回来</h1>
-        <p class="home-description">保持登录页面的卡片风格，以下内容作为首页功能入口占位。</p>
+          <p class="home-description">保持登录页面的卡片风格，以下内容作为首页功能入口占位。</p>
+          <p class="profile-row">
+            用户名：{{ user?.username || '-' }} | ID：{{ user?.id || '-' }} | 角色：{{ user?.role || '-' }}
+          </p>
       </div>
 
       <section class="card-grid">

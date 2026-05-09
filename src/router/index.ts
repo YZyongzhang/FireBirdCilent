@@ -3,6 +3,7 @@ import HomeView from '@/views/HomeView.vue'
 import LoginView from '@/views/LoginView.vue'
 import ThoughtsView from '@/views/ThoughtsView.vue'
 import DailyPlanView from '@/views/DailyPlanView.vue'
+import SecondhandView from '@/views/SecondhandView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -30,6 +31,11 @@ const router = createRouter({
       path: '/daily-plan',
       name: 'daily-plan',
       component: DailyPlanView,
+    },
+    {
+      path: '/secondhand',
+      name: 'secondhand',
+      component: SecondhandView,
     },
   ],
 })
