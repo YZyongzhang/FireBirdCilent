@@ -13,6 +13,12 @@ export const homeCards: HomeCardData[] = [
     route: '/thoughts',
   },
   {
+    title: '二手交易',
+    description: '发布与浏览二手商品，支持筛选、查看详情和快速发布。',
+    actionText: '进入页面',
+    route: '/secondhand',
+  },
+  {
     title: '每日计划',
     description: '查看今天的安排、任务优先级和关键提醒，帮助你快速进入工作状态。',
     actionText: '进入页面',

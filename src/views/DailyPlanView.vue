@@ -1,13 +1,9 @@
 <script setup lang="ts">
-<<<<<<< HEAD
 import { defaultDailyTaskSeeds, initialDailyPlansByDate } from '@/dataset/dailyPlan'
-import { computed, ref, watch } from 'vue'
-=======
-import { computed, ref, watch, onMounted } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import axios from 'axios'
 import { API_BASE } from '../config'
 import { getUser } from '../utils/auth'
->>>>>>> 6c6f264bc2bbda5ae25d5e975363cac41984c874
 
 interface DailyTask {
   id: string
@@ -42,7 +38,6 @@ const createPlan = (date: string): DailyPlan => ({
   tasks: createDefaultTasks(),
 })
 
-<<<<<<< HEAD
 const plansByDate = ref<Record<string, DailyPlan>>(
   Object.fromEntries(
     Object.entries(initialDailyPlansByDate).map(([date, plan]) => [
@@ -54,9 +49,6 @@ const plansByDate = ref<Record<string, DailyPlan>>(
     ]),
   ),
 )
-=======
-const plansByDate = ref<Record<string, DailyPlan>>({})
->>>>>>> 6c6f264bc2bbda5ae25d5e975363cac41984c874
 const selectedDate = ref(todayKey)
 const exportFormat = ref<'markdown' | 'json'>('markdown')
 const exportMode = ref<'single' | 'range' | 'manual'>('single')
@@ -66,8 +58,6 @@ const manualSelectedDates = ref<string[]>([todayKey])
 const expandedTaskId = ref('')
 const quickTaskTitle = ref('')
 
-<<<<<<< HEAD
-=======
 const getAuthHeaders = () => {
   const u = getUser()
   if (!u) return {}
@@ -124,7 +114,6 @@ onMounted(() => {
   fetchAllPlans()
 })
 
->>>>>>> 6c6f264bc2bbda5ae25d5e975363cac41984c874
 const sortedDates = computed(() => Object.keys(plansByDate.value).sort((left, right) => left.localeCompare(right)))
 
 const ensurePlan = (date: string) => {
@@ -161,11 +150,6 @@ const formattedSelectedDate = computed(() => {
   })
 })
 
-<<<<<<< HEAD
-=======
-// Note: persistence moved to backend via API calls below
-
->>>>>>> 6c6f264bc2bbda5ae25d5e975363cac41984c874
 watch(
   currentPlan,
   (plan) => {
@@ -198,6 +182,10 @@ watch(selectedDate, (date) => {
 
 const selectDate = (date: string) => {
   selectedDate.value = date
+}
+
+const createDatePlan = () => {
+  ensurePlan(selectedDate.value)
 }
 
 const toggleDayCompleted = async () => {
@@ -375,7 +363,6 @@ const exportPlans = () => {
 
 <template>
   <main class="daily-plan-page">
-<<<<<<< HEAD
     <section class="workspace-shell">
       <aside class="sidebar-panel">
         <div class="sidebar-header">
@@ -422,115 +409,6 @@ const exportPlans = () => {
           </div>
           <div class="hero-status">
             <span>{{ currentPlan?.completed ? '当日已完成' : '当日进行中' }}</span>
-=======
-    <section class="container-shell">
-      <header class="hero">
-        <div class="date-badge">
-          <span class="date-pill">{{ formattedSelectedDate }}</span>
-          <span class="quote-text">把握今日</span>
-        </div>
-        <h1>每日计划</h1>
-        <p class="sub-text">记录要事 · 逐步完成 · 保持节奏</p>
-      </header>
-
-      <section class="stats">
-        <article class="stat-card">
-          <div class="stat-number">{{ totalCount }}</div>
-          <div class="stat-label">全部任务</div>
-        </article>
-        <article class="stat-card">
-          <div class="stat-number">{{ completedCount }}</div>
-          <div class="stat-label">已完成</div>
-        </article>
-        <article class="stat-card">
-          <div class="stat-number">{{ pendingCount }}</div>
-          <div class="stat-label">进行中</div>
-        </article>
-      </section>
-
-      <section class="add-task">
-        <input v-model="quickTaskTitle" type="text" placeholder="写一个计划，比如“完成报告”或“晨跑 30 分钟”"
-          @keyup.enter="addQuickTask" />
-
-
-        <button type="button" @click="addQuickTask">添加计划</button>
-      </section>
-
-      <section class="task-list-container">
-        <div class="tasks-header">
-          <span>今日待办清单</span>
-          <span>点击任务展开时间与备注</span>
-        </div>
-
-        <div class="tasks">
-          <article v-for="task in currentPlan?.tasks ?? []" :key="task.id" class="task-item"
-            :class="{ completed: task.done, expanded: expandedTaskId === task.id }"
-            @click="toggleTaskExpanded(task.id)">
-            <button type="button" class="task-check" :class="{ completed: task.done }"
-              @click.stop="updateTask(task.id, { done: !task.done })">
-              {{ task.done ? '✓' : '' }}
-            </button>
-
-            <div class="task-main">
-              <div class="task-row">
-                <!-- <input
-                  class="task-title-input"
-                  :class="{ completed: task.done }"
-                  :value="task.title"
-                  type="text"
-                  @click.stop
-                  @input="updateTask(task.id, { title: ($event.target as HTMLInputElement).value })"
-                /> -->
-                <input v-model="task.title" class="task-title-input" :class="{ completed: task.done }" type="text"
-                  @click.stop @blur="updateTask(task.id, { title: task.title })" />
-                <span class="task-tag">{{ task.time || '未设置时间' }}</span>
-                <button type="button" class="delete-btn" @click.stop="removeTask(task.id)">×</button>
-              </div>
-
-              <div v-if="expandedTaskId === task.id" class="task-detail-panel" @click.stop>
-                <label class="detail-field">
-                  <span>时间安排</span>
-                  <!-- <input
-                    :value="task.time"
-                    type="text"
-                    placeholder="例如 10:00 - 11:00"
-                    @input="updateTask(task.id, { time: ($event.target as HTMLInputElement).value })"
-                  /> -->
-                  <input v-model="task.time" type="text" placeholder="例如 10:00 - 11:00"
-                    @blur="updateTask(task.id, { time: task.time })" />
-                </label>
-
-                <label class="detail-field">
-                  <span>补充说明</span>
-                  <!-- <textarea
-                    :value="task.note"
-                    rows="4"
-                    placeholder="写下这项计划的备注说明..."
-                    @input="updateTask(task.id, { note: ($event.target as HTMLTextAreaElement).value })"
-                  ></textarea> -->
-                  <textarea v-model="task.note" rows="4" placeholder="写下这项计划的备注说明..."
-                    @blur="updateTask(task.id, { note: task.note })" />
-                </label>
-              </div>
-            </div>
-          </article>
-
-          <div v-if="!(currentPlan?.tasks.length ?? 0)" class="empty-state">
-            <strong>暂无任务</strong>
-            <p>先添加一项今天的计划吧。</p>
-          </div>
-        </div>
-      </section>
-
-      <section class="tool-grid">
-
-        <article class="tool-card wide-card">
-          <div class="tool-header">
-            <div>
-              <p class="tool-title">导出与状态</p>
-              <h2>保持完整功能</h2>
-            </div>
->>>>>>> 6c6f264bc2bbda5ae25d5e975363cac41984c874
             <button type="button" class="secondary-btn" @click="toggleDayCompleted">
               {{ currentPlan?.completed ? '取消完成' : '标记完成' }}
             </button>
