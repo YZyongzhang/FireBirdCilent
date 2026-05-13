@@ -78,6 +78,7 @@ const filtered = computed(() => {
 })
 
 const canContactSeller = computed(() => {
+  console.log("canContactSeller", activeItem.value?.seller)
   return activeItem.value?.seller?.id !== undefined && activeItem.value?.seller?.id !== null
 })
 
