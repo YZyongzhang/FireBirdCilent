@@ -28,7 +28,7 @@ const user = getUser()
 
 const search = ref('')
 const category = ref('全部')
-const categories = ref<string[]>(['全部'])
+const categories = ref<string[]>(['全部','灵感','模版'])
 
 const items = ref<Item[]>([])
 const total = ref(0)
@@ -89,6 +89,7 @@ async function fetchCategories() {
 async function fetchItems() {
   loading.value = true
   error.value = ''
+  console.log('fetchItems')
   try {
     const res = await getItems({
       page: page.value,
@@ -158,6 +159,7 @@ async function handleAddToCart(it: Item) {
 }
 
 async function openChat(seller: Item) {
+  console.log("openChat", seller.seller)
   if (!seller.seller) return
   chatWith.value = { id: seller.seller.id, name: seller.seller.name }
   showChat.value = true
