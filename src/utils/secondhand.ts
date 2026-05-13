@@ -22,9 +22,36 @@ export type Item = {
   images?: string[]
   description?: string
   seller?: { id: string | number; name: string }
+  sellerId?: string | number
   sellerName?: string
   date?: string
   category?: string
+}
+
+export type RawItem = {
+  id: string | number
+  title: string
+  price: number
+  thumb?: string
+  images?: string[]
+  description?: string
+  sellerId?: string | number
+  sellerName?: string
+  date?: string
+  category?: string
+}
+
+function adaptItem(raw: RawItem): Item {
+  return {
+    ...raw,
+    seller: raw.sellerId !== undefined
+      ? { id: raw.sellerId, name: raw.sellerName || '' }
+      : undefined,
+  }
+}
+
+function adaptItems(rawItems: RawItem[]): Item[] {
+  return rawItems.map(adaptItem)
 }
 
 export type CartItem = {
@@ -64,6 +91,11 @@ export type Order = {
 
 export interface ItemsResponse {
   items: Item[]
+  total: number
+}
+
+export interface RawItemsResponse {
+  items: RawItem[]
   total: number
 }
 
@@ -108,18 +140,21 @@ export async function getItems(params: {
   q?: string
   category?: string
 }): Promise<ItemsResponse> {
-  const { data } = await axios.get(`${BASE}/items`, {
+  const { data } = await axios.get<RawItemsResponse>(`${BASE}/items`, {
     params,
     headers: getHeaders(),
   })
-  return data
+  return {
+    ...data,
+    items: adaptItems(data.items),
+  }
 }
 
 export async function getItemDetail(id: string | number): Promise<Item> {
-  const { data } = await axios.get(`${BASE}/items/${id}`, {
+  const { data } = await axios.get<RawItem>(`${BASE}/items/${id}`, {
     headers: getHeaders(),
   })
-  return data
+  return adaptItem(data)
 }
 
 export async function createItem(payload: {
