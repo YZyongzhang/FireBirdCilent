@@ -77,6 +77,10 @@ const filtered = computed(() => {
   return items.value
 })
 
+const canContactSeller = computed(() => {
+  return activeItem.value?.seller?.id !== undefined && activeItem.value?.seller?.id !== null
+})
+
 async function fetchCategories() {
   try {
     const res = await getCategories()
@@ -158,17 +162,20 @@ async function handleAddToCart(it: Item) {
   }
 }
 
-async function openChat(seller: Item) {
-  console.log("openChat", seller.seller)
-  if (!seller.seller) return
-  chatWith.value = { id: seller.seller.id, name: seller.seller.name }
+async function openChat(item: Item) {
+  if (!item.seller || !item.seller.id) {
+    alert('无法联系卖家，卖家信息不完整')
+    return
+  }
+  chatWith.value = { id: item.seller.id, name: item.seller.name || item.sellerName || '未知卖家' }
   showChat.value = true
   chatLoading.value = true
   try {
-    const res = await getMessages(seller.seller.id)
+    const res = await getMessages(item.seller.id)
     chatMessages.value = res.messages
   } catch (e) {
     chatMessages.value = []
+    console.error('获取聊天记录失败:', e)
   } finally {
     chatLoading.value = false
   }
@@ -400,7 +407,13 @@ onMounted(() => {
             </p>
             <div class="action-row">
               <button class="btn-primary" @click="handleAddToCart(activeItem!)">加入购物车</button>
-              <button class="btn-outline" @click="openChat(activeItem!)">联系卖家</button>
+              <button 
+                class="btn-outline" 
+                @click="openChat(activeItem!)"
+                :disabled="!canContactSeller"
+              >
+                {{ canContactSeller ? '联系卖家' : '暂无法联系卖家' }}
+              </button>
             </div>
           </div>
         </div>
