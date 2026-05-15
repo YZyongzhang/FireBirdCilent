@@ -22,6 +22,7 @@ import {
   type Review,
   type Order,
 } from '@/utils/secondhand'
+import { getCurrentUser, type User } from '@/utils/user'
 import { getUser } from '@/utils/auth'
 
 const user = getUser()
@@ -81,6 +82,24 @@ const canContactSeller = computed(() => {
   console.log("canContactSeller", activeItem.value?.seller)
   return activeItem.value?.seller?.id !== undefined && activeItem.value?.seller?.id !== null
 })
+
+const currentUser = ref<User | null>(null)
+const isSeller = computed(() => currentUser.value?.role === 'seller')
+const isAdmin = computed(() => currentUser.value?.role === 'admin')
+const isAuthenticated = computed(() => currentUser.value !== null)
+
+async function loadCurrentUser() {
+  try {
+    const res = await getCurrentUser()
+    if (res.status === 'ok' && res.data) {
+      currentUser.value = res.data
+    }
+  } catch (e) {
+    console.error('加载用户信息失败:', e)
+  }
+}
+
+loadCurrentUser()
 
 async function fetchCategories() {
   try {

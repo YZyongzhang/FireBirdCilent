@@ -55,6 +55,7 @@ const regUsername = ref('')
 const regPassword = ref('')
 const regConfirm = ref('')
 const regEmail = ref('')
+const regRole = ref<'user' | 'seller' | 'admin'>('user')
 const handleRegister = async () => {
   if (regPassword.value !== regConfirm.value) {
     errorMessage.value = '两次输入的密码不一致'
@@ -65,6 +66,7 @@ const handleRegister = async () => {
       username: regUsername.value,
       password: regPassword.value,
       email: regEmail.value,
+      role: regRole.value,
     })
     if (res.data.status === 'ok') {
       router.push('/login')
@@ -290,6 +292,15 @@ onUnmounted(() => {
         <label class="form-item">
           <span>邮箱（可选）</span>
           <input v-model="regEmail" type="email" placeholder="请输入邮箱" />
+        </label>
+
+        <label class="form-item">
+          <span>用户角色</span>
+          <select v-model="regRole" class="select">
+            <option value="user">普通用户</option>
+            <option value="seller">卖家</option>
+            <option value="admin">管理员</option>
+          </select>
         </label>
 
         <label class="form-item">
