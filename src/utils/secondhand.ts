@@ -70,6 +70,23 @@ export type Message = {
   toUserId: string | number
   content: string
   date: string
+  itemId?: string
+  itemTitle?: string
+  isRead?: number
+}
+
+export type Conversation = {
+  itemId: string
+  itemTitle: string
+  otherUserId: string | number
+  otherUsername: string
+  lastMessage: string
+  lastDate: string
+  unreadCount: number
+}
+
+export interface ConversationsResponse {
+  conversations: Conversation[]
 }
 
 export type Review = {
@@ -258,9 +275,25 @@ export async function clearCart(): Promise<void> {
   })
 }
 
-export async function getMessages(withUserId: string | number): Promise<MessagesResponse> {
-  const { data } = await axios.get(`${BASE}/messages`, {
-    params: { withUserId },
+
+
+export async function getConversations(): Promise<ConversationsResponse> {
+  const { data } = await axios.get(`${BASE}/messages/conversations`, {
+    headers: getHeaders(),
+  })
+  return data
+}
+
+export async function getMessagesByItem(itemId: string | number): Promise<MessagesResponse> {
+  const { data } = await axios.get(`${BASE}/messages/item/${itemId}`, {
+    headers: getHeaders(),
+  })
+  return data
+}
+
+export async function getConversation(withUserId: string | number, itemId: string): Promise<MessagesResponse> {
+  const { data } = await axios.get(`${BASE}/messages/conversation`, {
+    params: { withUserId, itemId },
     headers: getHeaders(),
   })
   return data
@@ -269,7 +302,9 @@ export async function getMessages(withUserId: string | number): Promise<Messages
 export async function sendMessage(payload: {
   toUserId: string | number
   content: string
-}): Promise<Message> {
+  itemId: string
+  itemTitle: string
+}): Promise<{ status: string; message: Message }> {
   const { data } = await axios.post(`${BASE}/messages`, payload, {
     headers: getHeaders(),
   })

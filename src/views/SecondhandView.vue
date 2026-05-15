@@ -8,7 +8,8 @@ import {
   updateCartItem,
   removeFromCart,
   clearCart,
-  getMessages,
+  getConversations,
+  getConversation,
   sendMessage,
   getOrders,
   createOrder,
@@ -21,6 +22,7 @@ import {
   type Message,
   type Review,
   type Order,
+  type Conversation,
 } from '@/utils/secondhand'
 import { getCurrentUser, type User } from '@/utils/user'
 import { getUser } from '@/utils/auth'
@@ -54,10 +56,12 @@ const cartItems = ref<CartItem[]>([])
 const cartLoading = ref(false)
 
 const showChat = ref(false)
-const chatWith = ref<{ id: string | number; name: string } | null>(null)
+const showConversations = ref(false)
+const currentConversation = ref<Conversation | null>(null)
 const chatMessages = ref<Message[]>([])
 const chatInput = ref('')
 const chatLoading = ref(false)
+const conversations = ref<Conversation[]>([])
 
 const showPayment = ref(false)
 const pendingOrder = ref<{ orderId: string | number; totalAmount: number } | null>(null)
@@ -83,23 +87,20 @@ const canContactSeller = computed(() => {
   return activeItem.value?.seller?.id !== undefined && activeItem.value?.seller?.id !== null
 })
 
-const currentUser = ref<User | null>(null)
+const storedUser = getUser()
+const currentUser = ref<User | null>(storedUser ? { 
+  ...storedUser, 
+  role: storedUser.role as 'user' | 'seller' | 'admin' 
+} : null)
 const isSeller = computed(() => currentUser.value?.role === 'seller')
 const isAdmin = computed(() => currentUser.value?.role === 'admin')
 const isAuthenticated = computed(() => currentUser.value !== null)
 
-async function loadCurrentUser() {
-  try {
-    const res = await getCurrentUser()
-    if (res.status === 'ok' && res.data) {
-      currentUser.value = res.data
-    }
-  } catch (e) {
-    console.error('加载用户信息失败:', e)
-  }
-}
-
-loadCurrentUser()
+console.log('=== User Info ===')
+console.log('Current user from localStorage:', storedUser)
+console.log('currentUser:', currentUser.value)
+console.log('isSeller:', isSeller.value)
+console.log('isAuthenticated:', isAuthenticated.value)
 
 async function fetchCategories() {
   try {
@@ -186,16 +187,34 @@ async function handleAddToCart(it: Item) {
   }
 }
 
+async function fetchConversations() {
+  try {
+    const res = await getConversations()
+    conversations.value = res.conversations
+  } catch (e) {
+    console.error('获取对话列表失败:', e)
+  }
+}
+
 async function openChat(item: Item) {
   if (!item.seller || !item.seller.id) {
     alert('无法联系卖家，卖家信息不完整')
     return
   }
-  chatWith.value = { id: item.seller.id, name: item.seller.name || item.sellerName || '未知卖家' }
+  const conversation: Conversation = {
+    itemId: String(item.id),
+    itemTitle: item.title,
+    otherUserId: item.seller.id,
+    otherUsername: item.seller.name || item.sellerName || '未知卖家',
+    lastMessage: '',
+    lastDate: '',
+    unreadCount: 0
+  }
+  currentConversation.value = conversation
   showChat.value = true
   chatLoading.value = true
   try {
-    const res = await getMessages(item.seller.id)
+    const res = await getConversation(item.seller.id, String(item.id))
     chatMessages.value = res.messages
   } catch (e) {
     chatMessages.value = []
@@ -206,17 +225,16 @@ async function openChat(item: Item) {
 }
 
 const showSellerMessages = ref(false)
-const sellerConversations = ref<{ userId: string | number; userName: string; lastMessage: string; unreadCount: number }[]>([])
 const sellerMessagesLoading = ref(false)
 
 async function fetchSellerMessages() {
   sellerMessagesLoading.value = true
   try {
-    const res = await getMessages(0)
-    sellerConversations.value = res.conversations || []
+    const res = await getConversations()
+    conversations.value = res.conversations || []
   } catch (e) {
-    sellerConversations.value = []
-    console.error('获取买家消息失败:', e)
+    conversations.value = []
+    console.error('获取消息列表失败:', e)
   } finally {
     sellerMessagesLoading.value = false
   }
@@ -227,13 +245,13 @@ function openSellerMessages() {
   fetchSellerMessages()
 }
 
-function openChatWithBuyer(buyerId: string | number, buyerName: string) {
-  chatWith.value = { id: buyerId, name: buyerName }
+async function openChatFromList(conversation: Conversation) {
+  currentConversation.value = conversation
   showChat.value = true
   showSellerMessages.value = false
   chatLoading.value = true
   try {
-    const res = await getMessages(buyerId)
+    const res = await getConversation(conversation.otherUserId, conversation.itemId)
     chatMessages.value = res.messages
   } catch (e) {
     chatMessages.value = []
@@ -244,15 +262,35 @@ function openChatWithBuyer(buyerId: string | number, buyerName: string) {
 }
 
 async function handleSendMessage() {
-  if (!chatInput.value.trim() || !chatWith.value) return
+  console.log('handleSendMessage called')
+  console.log('chatInput:', chatInput.value)
+  console.log('currentConversation:', currentConversation.value)
+  
+  if (!chatInput.value.trim()) {
+    console.log('chatInput is empty')
+    return
+  }
+  
+  if (!currentConversation.value) {
+    console.log('currentConversation is null')
+    alert('无法发送消息，请先选择一个对话')
+    return
+  }
+  
+  const conv = currentConversation.value
   try {
-    const msg = await sendMessage({
-      toUserId: chatWith.value.id,
+    console.log('Sending message to:', conv.otherUserId, 'item:', conv.itemId)
+    const res = await sendMessage({
+      toUserId: conv.otherUserId,
       content: chatInput.value,
+      itemId: conv.itemId,
+      itemTitle: conv.itemTitle,
     })
-    chatMessages.value.push(msg)
+    console.log('Message sent successfully:', res)
+    chatMessages.value.push(res.message)
     chatInput.value = ''
   } catch (e) {
+    console.error('Failed to send message:', e)
     alert('发送消息失败')
   }
 }
@@ -398,6 +436,7 @@ onMounted(() => {
         <div class="header-actions">
           <button v-if="!isSeller" class="btn-outline" @click="openOrders">我的订单</button>
           <button v-if="!isSeller" class="btn-outline" @click="openCart">购物车</button>
+          <button v-if="!isSeller" class="btn-outline" @click="openSellerMessages">我的消息</button>
           <button class="btn-primary" @click="showAddForm = true">发布商品</button>
           <button v-if="isSeller" class="btn-outline" @click="openSellerMessages">买家消息</button>
         </div>
@@ -562,21 +601,27 @@ onMounted(() => {
     <div v-if="showSellerMessages" class="modal-overlay" @click.self="showSellerMessages = false">
       <div class="modal modal-large">
         <button class="close" @click="showSellerMessages = false">关闭</button>
-        <h2>买家消息</h2>
+        <h2>{{ isSeller ? '买家消息' : '我的消息' }}</h2>
         <div v-if="sellerMessagesLoading" class="loading">加载中...</div>
-        <div v-else-if="sellerConversations.length === 0" class="empty">暂无买家消息</div>
+        <div v-else-if="conversations.length === 0" class="empty">暂无消息</div>
         <div v-else class="conversation-list">
           <div 
-            v-for="conv in sellerConversations" 
-            :key="conv.userId" 
+            v-for="conv in conversations" 
+            :key="conv.itemId" 
             class="conversation-item"
-            @click="openChatWithBuyer(conv.userId, conv.userName)"
+            @click="openChatFromList(conv)"
           >
-            <div class="conv-info">
-              <span class="conv-name">{{ conv.userName }}</span>
+            <div class="conv-product">
+              <span class="conv-product-title">商品：{{ conv.itemTitle }}</span>
+              <span v-if="conv.otherUsername" class="conv-other-user">与 {{ conv.otherUsername }} 的对话</span>
+            </div>
+            <div class="conv-preview">
               <span class="conv-message">{{ conv.lastMessage }}</span>
             </div>
-            <span v-if="conv.unreadCount > 0" class="conv-unread">{{ conv.unreadCount }}</span>
+            <div class="conv-meta">
+              <span class="conv-date">{{ conv.lastDate }}</span>
+              <span v-if="conv.unreadCount > 0" class="conv-unread">{{ conv.unreadCount }}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -617,13 +662,23 @@ onMounted(() => {
     <div v-if="showChat" class="modal-overlay" @click.self="showChat = false">
       <div class="modal modal-large">
         <button class="close" @click="showChat = false">关闭</button>
-        <h2>联系 {{ chatWith?.name }}</h2>
+        <div class="chat-header">
+          <button class="btn-back" @click="showChat = false; showSellerMessages = true;">← 返回</button>
+          <div class="chat-header-info">
+            <h2>{{ currentConversation?.itemTitle || '聊天' }}</h2>
+            <span class="chat-product-label">商品咨询</span>
+          </div>
+          <div class="chat-other-info">
+            <span class="chat-other-label">{{ isSeller ? '买家' : '卖家' }}：</span>
+            <span class="chat-other-user">{{ currentConversation?.otherUsername }}</span>
+          </div>
+        </div>
         <div class="chat-container">
           <div class="chat-messages" v-if="!chatLoading">
             <div
               v-for="msg in chatMessages"
               :key="msg.id"
-              :class="['chat-msg', msg.fromUserId === user?.id ? 'mine' : 'theirs']"
+              :class="['chat-msg', String(msg.fromUserId) === String(user?.id) ? 'mine' : 'theirs']"
             >
               <span class="msg-user">{{ msg.fromUsername }}</span>
               <p class="msg-content">{{ msg.content }}</p>
@@ -1065,6 +1120,108 @@ onMounted(() => {
   gap: 8px;
 }
 
+.conversation-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.conversation-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  background: #f9f9f9;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.conversation-item:hover {
+  background: #f0f0f0;
+}
+.conv-product {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.conv-product-title {
+  font-weight: 600;
+  color: #333;
+  font-size: 14px;
+}
+.conv-other-user {
+  font-size: 12px;
+  color: #666;
+}
+.conv-preview {
+  font-size: 13px;
+  color: #888;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.conv-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.conv-date {
+  font-size: 11px;
+  color: #aaa;
+}
+.conv-unread {
+  background: #f56c6c;
+  color: white;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  min-width: 18px;
+  text-align: center;
+}
+
+.chat-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #eee;
+  margin-bottom: 12px;
+}
+.chat-header .btn-back {
+  padding: 6px 12px;
+  background: #f5f5f5;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+.chat-header-info {
+  flex: 1;
+}
+.chat-header-info h2 {
+  margin: 0;
+  font-size: 16px;
+  color: #333;
+}
+.chat-product-label {
+  font-size: 12px;
+  color: #999;
+  margin-top: 2px;
+  display: block;
+}
+.chat-other-info {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.chat-other-label {
+  font-size: 13px;
+  color: #666;
+}
+.chat-other-user {
+  font-size: 14px;
+  color: #409eff;
+  font-weight: 500;
+}
 .chat-container {
   display: flex;
   flex-direction: column;
@@ -1091,11 +1248,14 @@ onMounted(() => {
   align-self: flex-end;
   background: #409eff;
   color: white;
+  border-radius: 8px 8px 0 8px;
 }
 .chat-msg.theirs {
   align-self: flex-start;
-  background: white;
-  border: 1px solid #eee;
+  background: #fff;
+  color: #333;
+  border: 1px solid #e8e8e8;
+  border-radius: 8px 8px 8px 0;
 }
 .msg-user {
   font-size: 12px;
