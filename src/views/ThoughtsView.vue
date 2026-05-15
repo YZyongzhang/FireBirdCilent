@@ -1,18 +1,31 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import {
+  getGroups,
+  getNotes,
+  createGroup as apiCreateGroup,
+  createNote as apiCreateNote,
+  updateNote as apiUpdateNote,
+  deleteGroup as apiDeleteGroup,
+  deleteNote as apiDeleteNote,
+  type ThoughtGroup,
+  type ThoughtNote,
+} from '@/utils/thoughts'
 
-interface ThoughtGroup {
+interface LocalGroup {
   id: string
   name: string
+  remoteId?: number
 }
 
-interface ThoughtNote {
+interface LocalNote {
   id: string
   groupId: string
   title: string
   content: string
   updatedAt: string
+  remoteId?: number
 }
 
 interface ContextMenuState {
@@ -27,15 +40,17 @@ const route = useRoute()
 const router = useRouter()
 const storageKey = 'firebird-thoughts'
 const previewModes = ['split', 'edit', 'preview'] as const
+const loading = ref(false)
+const error = ref('')
 
 const createId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 
-const defaultGroups: ThoughtGroup[] = [
+const defaultGroups: LocalGroup[] = [
   { id: 'group-inbox', name: '灵感收集' },
   { id: 'group-review', name: '复盘记录' },
 ]
 
-const defaultNotes: ThoughtNote[] = [
+const defaultNotes: LocalNote[] = [
   {
     id: 'note-welcome',
     groupId: 'group-inbox',
@@ -45,8 +60,8 @@ const defaultNotes: ThoughtNote[] = [
   },
 ]
 
-const groups = ref<ThoughtGroup[]>(defaultGroups)
-const notes = ref<ThoughtNote[]>(defaultNotes)
+const groups = ref<LocalGroup[]>(defaultGroups)
+const notes = ref<LocalNote[]>(defaultNotes)
 const previewMode = ref<(typeof previewModes)[number]>('preview')
 const contextMenu = ref<ContextMenuState>({
   visible: false,
@@ -57,26 +72,59 @@ const contextMenu = ref<ContextMenuState>({
 
 const loadState = () => {
   const stored = localStorage.getItem(storageKey)
-
-  if (!stored) {
-    return
-  }
-
-  const parsed = JSON.parse(stored) as {
-    groups?: ThoughtGroup[]
-    notes?: ThoughtNote[]
-  }
-
-  if (parsed.groups?.length) {
-    groups.value = parsed.groups
-  }
-
-  if (parsed.notes?.length) {
-    notes.value = parsed.notes
+  if (stored) {
+    try {
+      const parsed = JSON.parse(stored) as {
+        groups?: LocalGroup[]
+        notes?: LocalNote[]
+      }
+      if (parsed.groups?.length) {
+        groups.value = parsed.groups
+      }
+      if (parsed.notes?.length) {
+        notes.value = parsed.notes
+      }
+    } catch {
+    }
   }
 }
 
-loadState()
+const saveState = () => {
+  localStorage.setItem(
+    storageKey,
+    JSON.stringify({
+      groups: groups.value,
+      notes: notes.value,
+    }),
+  )
+}
+
+const syncFromServer = async () => {
+  loading.value = true
+  error.value = ''
+  try {
+    const remoteGroups = await getGroups()
+    const remoteNotes = await getNotes()
+    if (remoteGroups.length > 0 || remoteNotes.length > 0) {
+      groups.value = remoteGroups.map(g => ({ ...g, id: String(g.id) }))
+      notes.value = remoteNotes.map(n => ({
+        ...n,
+        id: String(n.id),
+        groupId: String(n.groupId),
+        updatedAt: n.updatedAt || new Date().toISOString(),
+      }))
+      saveState()
+    } else {
+      loadState()
+    }
+  } catch {
+    loadState()
+  } finally {
+    loading.value = false
+  }
+}
+
+syncFromServer()
 
 const currentGroupId = computed(() => {
   const routeGroupId = typeof route.params.groupId === 'string' ? route.params.groupId : ''
@@ -113,23 +161,14 @@ const syncRoute = (groupId: string, noteId?: string) => {
 }
 
 watch(
-  [groups, notes, currentGroupId, currentNoteId],
+  [currentGroupId, currentNoteId],
   () => {
-    localStorage.setItem(
-      storageKey,
-      JSON.stringify({
-        groups: groups.value,
-        notes: notes.value,
-      }),
-    )
-
-    if (!currentGroupId.value) {
-      return
+    saveState()
+    if (currentGroupId.value) {
+      syncRoute(currentGroupId.value, currentNoteId.value || undefined)
     }
-
-    syncRoute(currentGroupId.value, currentNoteId.value || undefined)
   },
-  { deep: true, immediate: true },
+  { immediate: true },
 )
 
 const closeContextMenu = () => {
@@ -145,7 +184,6 @@ const selectNote = (noteId: string) => {
   if (!currentGroupId.value) {
     return
   }
-
   syncRoute(currentGroupId.value, noteId)
 }
 
@@ -153,97 +191,119 @@ const ensureFallbackGroup = () => {
   if (groups.value.length && groups.value[0]) {
     return groups.value[0].id
   }
-
   const fallbackGroup = {
     id: createId(),
     name: '默认分组',
   }
-
   groups.value = [fallbackGroup]
   return fallbackGroup.id
 }
 
-const createGroup = () => {
+const createGroup = async () => {
   const name = window.prompt('请输入分组名称')?.trim()
-
   if (!name) {
     return
   }
-
-  const newGroup = {
-    id: createId(),
-    name,
+  try {
+    const remoteGroup = await apiCreateGroup(name)
+    const newGroup: LocalGroup = {
+      id: String(remoteGroup.id),
+      name: remoteGroup.name,
+      remoteId: remoteGroup.id,
+    }
+    groups.value = [newGroup, ...groups.value]
+    syncRoute(newGroup.id)
+  } catch {
+    const newGroup: LocalGroup = {
+      id: createId(),
+      name,
+    }
+    groups.value = [newGroup, ...groups.value]
+    syncRoute(newGroup.id)
   }
-
-  groups.value = [newGroup, ...groups.value]
-  syncRoute(newGroup.id)
 }
 
-const createNote = () => {
+const createNote = async () => {
   const groupId = currentGroupId.value || ensureFallbackGroup()
   const title = window.prompt('请输入文档标题')?.trim() || '未命名文档'
-  const newNote = {
-    id: createId(),
-    groupId,
-    title,
-    content: '# 新文档\n\n开始记录你的想法。',
-    updatedAt: new Date().toISOString(),
+  const content = '# ' + title + '\n\n开始记录你的想法。'
+  try {
+    const remoteNote = await apiCreateNote(Number(groupId), title, content)
+    const newNote: LocalNote = {
+      id: String(remoteNote.id),
+      groupId: String(remoteNote.groupId),
+      title: remoteNote.title,
+      content: remoteNote.content,
+      updatedAt: remoteNote.updatedAt || new Date().toISOString(),
+      remoteId: remoteNote.id,
+    }
+    notes.value = [newNote, ...notes.value]
+    syncRoute(groupId, newNote.id)
+  } catch {
+    const newNote: LocalNote = {
+      id: createId(),
+      groupId,
+      title,
+      content,
+      updatedAt: new Date().toISOString(),
+    }
+    notes.value = [newNote, ...notes.value]
+    syncRoute(groupId, newNote.id)
   }
-
-  notes.value = [newNote, ...notes.value]
-  syncRoute(groupId, newNote.id)
 }
 
-const deleteGroup = () => {
+const deleteGroup = async () => {
   if (!currentGroup.value) {
     return
   }
-
-  const confirmed = window.confirm(`确认删除分组“${currentGroup.value.name}”及其全部文档吗？`)
-
+  const confirmed = window.confirm(`确认删除分组"${currentGroup.value.name}"及其全部文档吗？`)
   if (!confirmed) {
     return
   }
-
+  try {
+    if (currentGroup.value.remoteId) {
+      await apiDeleteGroup(currentGroup.value.remoteId)
+    }
+  } catch {
+  }
   const nextGroups = groups.value.filter((group) => group.id !== currentGroup.value?.id)
   const nextNotes = notes.value.filter((note) => note.groupId !== currentGroup.value?.id)
-
   groups.value = nextGroups
   notes.value = nextNotes
-
   const fallbackGroupId = ensureFallbackGroup()
   const fallbackNoteId = notes.value.find((note) => note.groupId === fallbackGroupId)?.id
   syncRoute(fallbackGroupId, fallbackNoteId)
 }
 
-const deleteNote = (noteId?: string) => {
+const deleteNote = async (noteId?: string) => {
   if (!noteId) {
     return
   }
-
   const targetNote = notes.value.find((note) => note.id === noteId)
-
   if (!targetNote) {
     return
   }
-
-  const confirmed = window.confirm(`确认删除文档“${targetNote.title}”吗？`)
-
+  const confirmed = window.confirm(`确认删除文档"${targetNote.title}"吗？`)
   if (!confirmed) {
     return
   }
-
+  try {
+    if (targetNote.remoteId) {
+      await apiDeleteNote(targetNote.remoteId)
+    }
+  } catch {
+  }
   notes.value = notes.value.filter((note) => note.id !== noteId)
-
   const fallbackNoteId = notes.value.find((note) => note.groupId === currentGroupId.value)?.id
   syncRoute(currentGroupId.value || ensureFallbackGroup(), fallbackNoteId)
 }
 
-const updateCurrentNote = (patch: Partial<Pick<ThoughtNote, 'title' | 'content'>>) => {
+let saveTimeout: ReturnType<typeof setTimeout> | null = null
+
+const updateCurrentNote = (patch: Partial<Pick<LocalNote, 'title' | 'content'>>) => {
   if (!currentNote.value) {
     return
   }
-
   notes.value = notes.value.map((note) =>
     note.id === currentNote.value?.id
       ? {
@@ -253,6 +313,21 @@ const updateCurrentNote = (patch: Partial<Pick<ThoughtNote, 'title' | 'content'>
         }
       : note,
   )
+  if (saveTimeout) {
+    clearTimeout(saveTimeout)
+  }
+  saveTimeout = setTimeout(async () => {
+    const noteToUpdate = notes.value.find(n => n.id === currentNote.value?.id)
+    if (noteToUpdate && noteToUpdate.remoteId) {
+      try {
+        await apiUpdateNote(noteToUpdate.remoteId, {
+          title: noteToUpdate.title,
+          content: noteToUpdate.content,
+        })
+      } catch {
+      }
+    }
+  }, 1000)
 }
 
 const openContextMenu = (event: MouseEvent, type: ContextMenuState['type'], noteId?: string) => {
@@ -268,22 +343,18 @@ const openContextMenu = (event: MouseEvent, type: ContextMenuState['type'], note
 
 const handleContextAction = (action: 'create-group' | 'delete-group' | 'create-note' | 'delete-note') => {
   closeContextMenu()
-
   if (action === 'create-group') {
     createGroup()
     return
   }
-
   if (action === 'delete-group') {
     deleteGroup()
     return
   }
-
   if (action === 'create-note') {
     createNote()
     return
   }
-
   deleteNote(contextMenu.value.noteId)
 }
 
@@ -416,11 +487,18 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener('click', closeContextMenu)
   window.removeEventListener('scroll', closeContextMenu, true)
+  if (saveTimeout) {
+    clearTimeout(saveTimeout)
+  }
 })
 </script>
 
 <template>
   <main class="thoughts-page">
+    <div v-if="loading" class="loading-overlay">
+      <div class="loading-spinner"></div>
+      <p>加载中...</p>
+    </div>
     <section class="thoughts-shell">
       <aside class="panel sidebar-panel">
         <div class="panel-header">
@@ -545,6 +623,40 @@ onBeforeUnmount(() => {
     radial-gradient(circle at top left, rgba(96, 165, 250, 0.22), transparent 28%),
     radial-gradient(circle at top right, rgba(59, 130, 246, 0.18), transparent 24%),
     linear-gradient(135deg, #020617 0%, #0f172a 45%, #1d4ed8 100%);
+  position: relative;
+}
+
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(2, 6, 23, 0.8);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  gap: 16px;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(59, 130, 246, 0.3);
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 1s infinite linear;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading-overlay p {
+  color: #94a3b8;
+  font-size: 14px;
 }
 
 .thoughts-shell {
