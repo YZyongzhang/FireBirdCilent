@@ -174,6 +174,10 @@ async function handleAddItem() {
 }
 
 async function handleAddToCart(it: Item) {
+  if (isSeller.value) {
+    alert('卖家账号不能购买商品')
+    return
+  }
   try {
     await addToCart({ itemId: it.id, quantity: 1 })
     alert('已加入购物车')
@@ -192,6 +196,44 @@ async function openChat(item: Item) {
   chatLoading.value = true
   try {
     const res = await getMessages(item.seller.id)
+    chatMessages.value = res.messages
+  } catch (e) {
+    chatMessages.value = []
+    console.error('获取聊天记录失败:', e)
+  } finally {
+    chatLoading.value = false
+  }
+}
+
+const showSellerMessages = ref(false)
+const sellerConversations = ref<{ userId: string | number; userName: string; lastMessage: string; unreadCount: number }[]>([])
+const sellerMessagesLoading = ref(false)
+
+async function fetchSellerMessages() {
+  sellerMessagesLoading.value = true
+  try {
+    const res = await getMessages(0)
+    sellerConversations.value = res.conversations || []
+  } catch (e) {
+    sellerConversations.value = []
+    console.error('获取买家消息失败:', e)
+  } finally {
+    sellerMessagesLoading.value = false
+  }
+}
+
+function openSellerMessages() {
+  showSellerMessages.value = true
+  fetchSellerMessages()
+}
+
+function openChatWithBuyer(buyerId: string | number, buyerName: string) {
+  chatWith.value = { id: buyerId, name: buyerName }
+  showChat.value = true
+  showSellerMessages.value = false
+  chatLoading.value = true
+  try {
+    const res = await getMessages(buyerId)
     chatMessages.value = res.messages
   } catch (e) {
     chatMessages.value = []
@@ -354,9 +396,10 @@ onMounted(() => {
       <div class="header-row">
         <h1>二手交易</h1>
         <div class="header-actions">
-          <button class="btn-outline" @click="openOrders">我的订单</button>
-          <button class="btn-outline" @click="openCart">购物车</button>
+          <button v-if="!isSeller" class="btn-outline" @click="openOrders">我的订单</button>
+          <button v-if="!isSeller" class="btn-outline" @click="openCart">购物车</button>
           <button class="btn-primary" @click="showAddForm = true">发布商品</button>
+          <button v-if="isSeller" class="btn-outline" @click="openSellerMessages">买家消息</button>
         </div>
       </div>
 
@@ -513,6 +556,29 @@ onMounted(() => {
             {{ addLoading ? '发布中...' : '发布' }}
           </button>
         </form>
+      </div>
+    </div>
+
+    <div v-if="showSellerMessages" class="modal-overlay" @click.self="showSellerMessages = false">
+      <div class="modal modal-large">
+        <button class="close" @click="showSellerMessages = false">关闭</button>
+        <h2>买家消息</h2>
+        <div v-if="sellerMessagesLoading" class="loading">加载中...</div>
+        <div v-else-if="sellerConversations.length === 0" class="empty">暂无买家消息</div>
+        <div v-else class="conversation-list">
+          <div 
+            v-for="conv in sellerConversations" 
+            :key="conv.userId" 
+            class="conversation-item"
+            @click="openChatWithBuyer(conv.userId, conv.userName)"
+          >
+            <div class="conv-info">
+              <span class="conv-name">{{ conv.userName }}</span>
+              <span class="conv-message">{{ conv.lastMessage }}</span>
+            </div>
+            <span v-if="conv.unreadCount > 0" class="conv-unread">{{ conv.unreadCount }}</span>
+          </div>
+        </div>
       </div>
     </div>
 
