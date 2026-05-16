@@ -36,7 +36,7 @@ const categories = ref<string[]>(['全部','灵感','模版'])
 const items = ref<Item[]>([])
 const total = ref(0)
 const page = ref(1)
-const pageSize = ref(20)
+const pageSize = ref(9) // 每页9个商品，3x3布局
 
 const showDetail = ref(false)
 const activeItem = ref<Item | null>(null)
@@ -80,6 +80,10 @@ const error = ref('')
 
 const filtered = computed(() => {
   return items.value
+})
+
+const totalPages = computed(() => {
+  return Math.ceil(total.value / pageSize.value)
 })
 
 const canContactSeller = computed(() => {
@@ -129,6 +133,32 @@ async function fetchItems() {
     console.error(e)
   } finally {
     loading.value = false
+  }
+}
+
+function handleSearch() {
+  page.value = 1
+  fetchItems()
+}
+
+function goToPrevPage() {
+  if (page.value > 1) {
+    page.value--
+    fetchItems()
+  }
+}
+
+function goToNextPage() {
+  if (page.value < totalPages.value) {
+    page.value++
+    fetchItems()
+  }
+}
+
+function goToPage(pageNum: number) {
+  if (pageNum >= 1 && pageNum <= totalPages.value && pageNum !== page.value) {
+    page.value = pageNum
+    fetchItems()
   }
 }
 
@@ -437,10 +467,11 @@ onMounted(() => {
       <div class="circle circle-3"></div>
     </div>
 
-    <section class="container">
-      <div class="header-row">
-        <h1>二手交易</h1>
-        <div class="header-actions">
+    <!-- 顶部导航栏 -->
+    <header class="top-bar">
+      <div class="top-content">
+        <h1 class="page-title">🛒 二手交易</h1>
+        <div class="top-actions">
           <button v-if="!isSeller" class="btn-outline" @click="openOrders">我的订单</button>
           <button v-if="!isSeller" class="btn-outline" @click="openCart">购物车</button>
           <button v-if="!isSeller" class="btn-outline" @click="openSellerMessages">我的消息</button>
@@ -448,53 +479,93 @@ onMounted(() => {
           <button v-if="isSeller" class="btn-outline" @click="openSellerMessages">买家消息</button>
         </div>
       </div>
+    </header>
 
-      <div class="controls">
+    <!-- 主内容区域 -->
+    <section class="main-content">
+      <!-- 搜索区域 -->
+      <div class="search-bar">
         <input
           v-model="search"
           placeholder="搜索商品、描述或卖家"
-          class="search"
-          @input="fetchItems"
+          class="search-input"
+          @input="handleSearch"
         />
-        <select v-model="category" class="select" @change="fetchItems">
+        <select v-model="category" class="category-select" @change="handleSearch">
           <option v-for="c in categories" :key="c">{{ c }}</option>
         </select>
       </div>
 
-      <div v-if="loading" class="loading">加载中...</div>
-      <div v-else-if="error" class="error">{{ error }}</div>
+      <!-- 商品展示区域 -->
+      <div class="items-container">
+        <div v-if="loading" class="loading-overlay">
+          <div class="loading-spinner"></div>
+          <span>加载中...</span>
+        </div>
+        <div v-else-if="error" class="error-overlay">{{ error }}</div>
 
-      <div class="list-grid" v-else>
-        <div
-          v-for="item in filtered"
-          :key="item.id"
-          class="card"
-          @click="openDetail(item)"
-        >
-          <div class="thumb">
-            <img :src="item.thumb || '/placeholder.png'" alt="" />
-          </div>
-          <div class="card-body">
-            <div class="title">{{ item.title }}</div>
-            <div class="meta">
-              <span class="price">¥{{ item.price }}</span>
-              <span class="seller">{{ item.sellerName || item.seller?.name }}</span>
+        <div v-else class="items-grid">
+          <div
+            v-for="item in filtered"
+            :key="item.id"
+            class="item-card"
+            @click="openDetail(item)"
+          >
+            <div class="card-image">
+              <img :src="item.thumb || '/placeholder.png'" :alt="item.title" />
+              <div class="card-overlay">
+                <span class="quick-view">快速查看</span>
+              </div>
+            </div>
+            <div class="card-info">
+              <h3 class="card-title">{{ item.title }}</h3>
+              <p class="card-price">¥{{ item.price }}</p>
+              <span class="card-seller">{{ item.sellerName || item.seller?.name }}</span>
             </div>
           </div>
         </div>
+
+        <div v-if="!loading && filtered.length === 0" class="empty-state">
+          <span class="empty-icon">📭</span>
+          <p>暂无符合条件的商品</p>
+        </div>
       </div>
 
-      <div v-if="!loading && filtered.length === 0" class="empty">暂无符合条件的商品</div>
-
-      <div class="pagination" v-if="total > pageSize">
-        <button :disabled="page <= 1" @click="page--; fetchItems()">上一页</button>
-        <span>{{ page }} / {{ Math.ceil(total / pageSize) }}</span>
-        <button
-          :disabled="page >= Math.ceil(total / pageSize)"
-          @click="page++; fetchItems()"
+      <!-- 翻页导航 -->
+      <div class="pagination-bar">
+        <button 
+          class="nav-btn prev-btn" 
+          :disabled="page <= 1" 
+          @click="goToPrevPage"
         >
-          下一页
+          <span class="nav-icon">←</span>
+          <span>上一页</span>
         </button>
+        
+        <div class="page-indicators">
+          <span 
+            v-for="i in totalPages" 
+            :key="i" 
+            class="page-dot"
+            :class="{ active: page === i }"
+            @click="goToPage(i)"
+          ></span>
+        </div>
+        
+        <button 
+          class="nav-btn next-btn" 
+          :disabled="page >= totalPages" 
+          @click="goToNextPage"
+        >
+          <span>下一页</span>
+          <span class="nav-icon">→</span>
+        </button>
+      </div>
+
+      <!-- 页码信息 -->
+      <div class="page-info">
+        <span>第 {{ page }} / {{ totalPages }} 页</span>
+        <span class="total-count">共 {{ total }} 件商品</span>
       </div>
     </section>
 
@@ -769,11 +840,15 @@ onMounted(() => {
 <style scoped>
 .secondhand-page {
   min-height: 100vh;
-  padding: 24px;
+  min-height: 100dvh;
+  padding: 0;
+  margin: 0;
   box-sizing: border-box;
   background: linear-gradient(135deg, #1e1b4b 0%, #312e81 30%, #4c1d95 60%, #7c3aed 100%);
   position: relative;
   overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .bg-decoration {
@@ -790,179 +865,214 @@ onMounted(() => {
 .circle {
   position: absolute;
   border-radius: 50%;
-  opacity: 0.12;
-  filter: blur(40px);
-  animation: float 25s infinite ease-in-out;
+  opacity: 0.15;
+  filter: blur(50px);
+  animation: float 30s infinite ease-in-out;
 }
 
 .circle-1 {
-  width: 500px;
-  height: 500px;
+  width: 600px;
+  height: 600px;
   background: linear-gradient(135deg, #a855f7, #7c3aed);
-  top: -150px;
-  right: -150px;
+  top: -200px;
+  right: -200px;
 }
 
 .circle-2 {
-  width: 400px;
-  height: 400px;
+  width: 500px;
+  height: 500px;
   background: linear-gradient(135deg, #6366f1, #3b82f6);
-  bottom: -100px;
-  left: -100px;
-  animation-delay: -10s;
+  bottom: -150px;
+  left: -150px;
+  animation-delay: -12s;
 }
 
 .circle-3 {
-  width: 250px;
-  height: 250px;
+  width: 350px;
+  height: 350px;
   background: linear-gradient(135deg, #ec4899, #f472b6);
-  top: 40%;
-  right: 20%;
-  animation-delay: -5s;
+  top: 45%;
+  right: 15%;
+  animation-delay: -8s;
 }
 
 @keyframes float {
   0%, 100% { transform: translate(0, 0) scale(1); }
-  25% { transform: translate(30px, -30px) scale(1.05); }
-  50% { transform: translate(-20px, 20px) scale(0.95); }
-  75% { transform: translate(20px, 10px) scale(1.02); }
+  25% { transform: translate(40px, -40px) scale(1.08); }
+  50% { transform: translate(-30px, 30px) scale(0.92); }
+  75% { transform: translate(25px, 15px) scale(1.04); }
 }
 
-.container {
-  max-width: 1400px;
-  margin: 20px auto;
-  padding: 40px 48px;
-  background: rgba(255, 255, 255, 0.98);
-  border-radius: 28px;
-  box-shadow:
-    0 30px 100px rgba(76, 29, 149, 0.3),
-    0 0 0 1px rgba(255, 255, 255, 0.3) inset;
-  position: relative;
-  z-index: 1;
-  min-height: calc(100vh - 40px);
+/* 顶部导航栏 */
+.top-bar {
+  position: sticky;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(139, 92, 246, 0.1);
+  padding: 16px 32px;
+  box-shadow: 0 4px 20px rgba(76, 29, 149, 0.1);
 }
-.header-row {
+
+.top-content {
+  max-width: 1600px;
+  margin: 0 auto;
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  gap: 20px;
-  flex-wrap: wrap;
-  margin-bottom: 28px;
-  padding-bottom: 24px;
-  border-bottom: 2px solid #f1f5f9;
+  align-items: center;
+  gap: 24px;
 }
 
-.header-row h1 {
+.page-title {
   margin: 0;
-  font-size: 36px;
+  font-size: 28px;
   font-weight: 700;
   color: #0f172a;
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
 }
 
-.header-row h1::before {
-  content: '🛒';
-  font-size: 32px;
-}
-
-.header-actions {
+.top-actions {
   display: flex;
-  gap: 14px;
+  gap: 12px;
   flex-wrap: wrap;
 }
 
-.controls {
-  display: flex;
-  gap: 14px;
-  margin-bottom: 28px;
+/* 主内容区域 */
+.main-content {
+  flex: 1;
+  position: relative;
+  z-index: 1;
+  padding: 32px;
+  max-width: 1600px;
+  width: 100%;
+  margin: 0 auto;
+  box-sizing: border-box;
 }
 
-.search {
+/* 搜索区域 */
+.search-bar {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 32px;
+  align-items: center;
+}
+
+.search-input {
   flex: 1;
   min-width: 320px;
-  padding: 14px 18px 14px 48px;
-  border-radius: 16px;
-  border: 2px solid #e2e8f0;
-  background: #fafafa;
+  max-width: 500px;
+  padding: 14px 20px 14px 52px;
+  border-radius: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.9);
   font-size: 16px;
   color: #1e293b;
-  transition: all 0.25s ease;
+  transition: all 0.3s ease;
   position: relative;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
 }
 
-.search:focus {
+.search-input:focus {
   border-color: #8b5cf6;
   background: #fff;
-  box-shadow:
-    0 0 0 4px rgba(139, 92, 246, 0.12),
-    0 4px 12px rgba(139, 92, 246, 0.15);
+  box-shadow: 
+    0 0 0 4px rgba(139, 92, 246, 0.15),
+    0 6px 24px rgba(76, 29, 149, 0.2);
   outline: none;
 }
 
-.search::placeholder {
+.search-input::placeholder {
   color: #94a3b8;
 }
 
-.select {
-  padding: 14px 18px;
-  border-radius: 16px;
-  border: 2px solid #e2e8f0;
-  background: #fafafa;
+.category-select {
+  padding: 14px 20px;
+  border-radius: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.9);
   font-size: 16px;
   color: #1e293b;
   cursor: pointer;
-  min-width: 160px;
-  transition: all 0.25s ease;
+  min-width: 140px;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
 }
 
-.select:focus {
+.category-select:focus {
   border-color: #8b5cf6;
   background: #fff;
   outline: none;
 }
-.list-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 28px;
-  margin-top: 28px;
+
+/* 商品展示区域 */
+.items-container {
+  min-height: 500px;
+  display: flex;
+  flex-direction: column;
 }
 
-.card {
-  border: none;
-  border-radius: 20px;
+.loading-overlay {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 18px;
+}
+
+.loading-spinner {
+  width: 50px;
+  height: 50px;
+  border: 4px solid rgba(255, 255, 255, 0.2);
+  border-top-color: #8b5cf6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.error-overlay {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fca5a5;
+  font-size: 18px;
+}
+
+.items-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 28px;
+  flex: 1;
+}
+
+.item-card {
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 24px;
   overflow: hidden;
   cursor: pointer;
-  background: #fff;
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
-  position: relative;
+  transition: all 0.35s ease;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-.card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 4px;
-  background: linear-gradient(90deg, #8b5cf6, #7c3aed);
-  opacity: 0;
-  transition: opacity 0.3s ease;
+.item-card:hover {
+  transform: translateY(-12px);
+  box-shadow: 0 20px 50px rgba(76, 29, 149, 0.25);
 }
 
-.card:hover {
-  transform: translateY(-8px);
-  box-shadow: 0 16px 48px rgba(76, 29, 149, 0.2);
-}
-
-.card:hover::before {
-  opacity: 1;
-}
-
-.thumb {
-  height: 220px;
+.card-image {
+  height: 280px;
   background: linear-gradient(135deg, #f8fafc, #f1f5f9);
   display: flex;
   align-items: center;
@@ -971,112 +1081,178 @@ onMounted(() => {
   overflow: hidden;
 }
 
-.thumb::after {
-  content: '📦';
-  position: absolute;
-  font-size: 56px;
-  opacity: 0.1;
-}
-
-.thumb img {
+.card-image img {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
-  position: relative;
-  z-index: 1;
+  transition: transform 0.35s ease;
 }
 
-.card-body {
+.item-card:hover .card-image img {
+  transform: scale(1.05);
+}
+
+.card-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(76, 29, 149, 0.8), rgba(124, 58, 237, 0.8));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.item-card:hover .card-overlay {
+  opacity: 1;
+}
+
+.quick-view {
+  color: white;
+  font-weight: 600;
+  font-size: 16px;
+  padding: 12px 32px;
+  border: 2px solid white;
+  border-radius: 30px;
+  transition: all 0.3s ease;
+}
+
+.item-card:hover .quick-view {
+  transform: scale(1.05);
+}
+
+.card-info {
   padding: 20px;
 }
 
-.title {
+.card-title {
+  margin: 0 0 12px 0;
+  font-size: 18px;
   font-weight: 700;
-  font-size: 17px;
-  margin-bottom: 14px;
   color: #0f172a;
   line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
-.meta {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  color: #64748b;
-  font-size: 15px;
-}
-
-.price {
-  color: #dc2626;
+.card-price {
+  margin: 0 0 8px 0;
+  font-size: 24px;
   font-weight: 700;
-  font-size: 20px;
-}
-
-.seller {
-  color: #64748b;
-  font-size: 14px;
-}
-.empty {
-  text-align: center;
-  color: #94a3b8;
-  padding: 48px 0;
-  font-size: 16px;
-}
-
-.loading {
-  text-align: center;
-  color: #94a3b8;
-  padding: 32px 0;
-  font-size: 15px;
-}
-
-.error {
-  text-align: center;
   color: #dc2626;
-  padding: 32px 0;
-  font-size: 15px;
 }
 
-.pagination {
+.card-seller {
+  font-size: 14px;
+  color: #64748b;
+}
+
+.empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.empty-icon {
+  font-size: 64px;
+}
+
+.empty-state p {
+  margin: 0;
+  font-size: 18px;
+}
+
+/* 翻页导航 */
+.pagination-bar {
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 20px;
+  gap: 24px;
   margin-top: 40px;
-  padding-top: 28px;
-  border-top: 2px solid #f1f5f9;
+  padding: 24px 0;
 }
 
-.pagination button {
-  padding: 12px 24px;
-  border: 2px solid #8b5cf6;
-  background: #fff;
-  color: #8b5cf6;
-  border-radius: 14px;
-  cursor: pointer;
+.nav-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 28px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 2px solid rgba(139, 92, 246, 0.3);
+  border-radius: 16px;
+  color: #4c1d95;
   font-weight: 600;
   font-size: 15px;
-  transition: all 0.25s ease;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
 }
 
-.pagination button:hover:not(:disabled) {
+.nav-btn:hover:not(:disabled) {
   background: #f5f3ff;
-  transform: translateY(-2px);
+  border-color: #8b5cf6;
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(76, 29, 149, 0.2);
 }
 
-.pagination button:disabled {
+.nav-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
   border-color: #e2e8f0;
   color: #94a3b8;
 }
 
-.pagination span {
-  color: #64748b;
-  font-weight: 500;
+.nav-icon {
+  font-size: 18px;
+}
+
+.page-indicators {
+  display: flex;
+  gap: 12px;
+}
+
+.page-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.page-dot:hover {
+  background: rgba(255, 255, 255, 0.7);
+  transform: scale(1.2);
+}
+
+.page-dot.active {
+  background: #8b5cf6;
+  box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.3);
+  transform: scale(1.3);
+}
+
+/* 页码信息 */
+.page-info {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 32px;
+  color: rgba(255, 255, 255, 0.8);
   font-size: 15px;
 }
 
+.total-count {
+  opacity: 0.7;
+}
+
+/* 按钮样式 */
 .btn-primary {
   padding: 12px 24px;
   background: linear-gradient(135deg, #4c1d95 0%, #7c3aed 50%, #8b5cf6 100%);
@@ -1102,7 +1278,7 @@ onMounted(() => {
 
 .btn-outline {
   padding: 12px 24px;
-  background: #fff;
+  background: rgba(255, 255, 255, 0.95);
   color: #8b5cf6;
   border: 2px solid #8b5cf6;
   border-radius: 14px;
@@ -1117,11 +1293,12 @@ onMounted(() => {
   transform: translateY(-2px);
 }
 
+/* 模态框样式 */
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.6);
-  backdrop-filter: blur(4px);
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1143,7 +1320,7 @@ onMounted(() => {
   position: relative;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: 0 25px 80px rgba(15, 23, 42, 0.3);
+  box-shadow: 0 25px 80px rgba(15, 23, 42, 0.35);
   animation: slideUp 0.3s ease;
 }
 
@@ -1181,6 +1358,7 @@ onMounted(() => {
   background: #e2e8f0;
   color: #334155;
 }
+
 .modal-content {
   display: flex;
   gap: 24px;
@@ -1238,6 +1416,7 @@ onMounted(() => {
   margin-top: 16px;
 }
 
+/* 评价区域 */
 .reviews-section {
   margin-top: 24px;
   padding-top: 20px;
@@ -1349,6 +1528,7 @@ onMounted(() => {
   padding: 20px;
 }
 
+/* 表单样式 */
 .add-form {
   display: flex;
   flex-direction: column;
@@ -1403,6 +1583,7 @@ onMounted(() => {
   flex: 1;
 }
 
+/* 购物车样式 */
 .cart-list {
   display: flex;
   flex-direction: column;
@@ -1489,6 +1670,7 @@ onMounted(() => {
   gap: 12px;
 }
 
+/* 对话列表样式 */
 .conversation-list {
   display: flex;
   flex-direction: column;
@@ -1560,6 +1742,7 @@ onMounted(() => {
   font-weight: 600;
 }
 
+/* 聊天样式 */
 .chat-header {
   display: flex;
   align-items: center;
@@ -1698,6 +1881,7 @@ onMounted(() => {
   outline: none;
 }
 
+/* 支付样式 */
 .payment-info {
   padding: 20px;
   background: #f8fafc;
@@ -1750,6 +1934,7 @@ onMounted(() => {
   font-size: 16px;
 }
 
+/* 订单样式 */
 .order-list {
   display: flex;
   flex-direction: column;
@@ -1828,100 +2013,70 @@ onMounted(() => {
 
 /* 响应式设计 */
 @media (max-width: 1200px) {
-  .container {
-    max-width: 100%;
-    margin: 16px;
-    padding: 32px;
+  .main-content {
+    padding: 24px;
   }
-
-  .list-grid {
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  
+  .items-grid {
+    grid-template-columns: repeat(2, 1fr);
     gap: 24px;
   }
 }
 
 @media (max-width: 768px) {
-  .secondhand-page {
-    padding: 12px;
+  .top-bar {
+    padding: 12px 16px;
   }
 
-  .container {
-    margin: 12px;
-    padding: 24px;
-    border-radius: 20px;
-    min-height: auto;
+  .page-title {
+    font-size: 22px;
   }
 
-  .header-row {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 16px;
-    margin-bottom: 20px;
-    padding-bottom: 16px;
-  }
-
-  .header-row h1 {
-    font-size: 28px;
-  }
-
-  .header-actions {
-    width: 100%;
-    flex-wrap: wrap;
-    gap: 10px;
+  .top-actions {
+    gap: 8px;
   }
 
   .btn-primary,
   .btn-outline {
-    padding: 10px 18px;
-    font-size: 14px;
+    padding: 10px 16px;
+    font-size: 13px;
   }
 
-  .controls {
-    flex-direction: column;
-    gap: 12px;
-    margin-bottom: 20px;
-  }
-
-  .search {
-    min-width: 100%;
-    padding: 12px 16px 12px 44px;
-  }
-
-  .select {
-    min-width: 100%;
-  }
-
-  .list-grid {
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-    gap: 20px;
-    margin-top: 20px;
-  }
-
-  .thumb {
-    height: 180px;
-  }
-
-  .card-body {
+  .main-content {
     padding: 16px;
   }
 
-  .title {
-    font-size: 16px;
-    margin-bottom: 10px;
-  }
-
-  .price {
-    font-size: 18px;
-  }
-
-  .pagination {
-    margin-top: 28px;
-    padding-top: 20px;
+  .search-bar {
+    flex-direction: column;
     gap: 12px;
   }
 
-  .pagination button {
-    padding: 10px 18px;
+  .search-input {
+    min-width: 100%;
+    max-width: 100%;
+  }
+
+  .category-select {
+    width: 100%;
+    min-width: 100%;
+  }
+
+  .items-grid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+
+  .card-image {
+    height: 220px;
+  }
+
+  .pagination-bar {
+    gap: 16px;
+    padding: 16px 0;
+  }
+
+  .nav-btn {
+    padding: 12px 20px;
     font-size: 14px;
   }
 
@@ -1945,34 +2100,42 @@ onMounted(() => {
 }
 
 @media (max-width: 480px) {
-  .container {
-    margin: 8px;
-    padding: 16px;
-    border-radius: 16px;
+  .page-title {
+    font-size: 20px;
   }
 
-  .header-row h1 {
-    font-size: 24px;
+  .main-content {
+    padding: 12px;
   }
 
-  .header-row h1::before {
-    font-size: 24px;
-  }
-
-  .list-grid {
-    grid-template-columns: 1fr;
+  .items-grid {
     gap: 16px;
   }
 
-  .btn-primary,
-  .btn-outline {
-    padding: 8px 16px;
+  .card-image {
+    height: 180px;
+  }
+
+  .card-info {
+    padding: 16px;
+  }
+
+  .card-title {
+    font-size: 16px;
+  }
+
+  .card-price {
+    font-size: 20px;
+  }
+
+  .nav-btn {
+    padding: 10px 16px;
     font-size: 13px;
   }
 
-  .pagination button {
-    padding: 8px 14px;
-    font-size: 13px;
+  .page-dot {
+    width: 12px;
+    height: 12px;
   }
 }
 </style>
