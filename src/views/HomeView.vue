@@ -2,10 +2,15 @@
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { getUser } from '../utils/auth'
+import { logout } from '../router'
 
 const router = useRouter()
 
 const user = ref(getUser())
+
+const handleLogout = () => {
+  logout()
+}
 
 const greeting = computed(() => {
   const hour = new Date().getHours()
@@ -81,7 +86,13 @@ const cards = [
         <div class="header-content">
           <div class="header-top">
             <span class="home-badge">🔥 FireBird</span>
-            <span class="date-badge">{{ currentDate }}</span>
+            <div class="header-right">
+              <span class="date-badge">{{ currentDate }}</span>
+              <button class="logout-btn" @click="handleLogout">
+                <span class="logout-icon">🚪</span>
+                <span>退出登录</span>
+              </button>
+            </div>
           </div>
           <h1>
             {{ greeting }}，{{ user?.username || '用户' }}
@@ -335,6 +346,37 @@ const cards = [
   font-size: 13px;
   font-weight: 500;
   border-radius: 20px;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.logout-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: none;
+  border-radius: 16px;
+  background: #fef2f2;
+  color: #dc2626;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.logout-btn:hover {
+  background: #fee2e2;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.2);
+}
+
+.logout-icon {
+  font-size: 14px;
 }
 
 .home-header-card h1 {
