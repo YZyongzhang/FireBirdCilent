@@ -829,63 +829,64 @@ onMounted(() => {
 }
 
 .container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 32px;
+  max-width: 1400px;
+  margin: 20px auto;
+  padding: 40px 48px;
   background: rgba(255, 255, 255, 0.98);
-  border-radius: 24px;
-  box-shadow: 
-    0 25px 80px rgba(76, 29, 149, 0.25),
+  border-radius: 28px;
+  box-shadow:
+    0 30px 100px rgba(76, 29, 149, 0.3),
     0 0 0 1px rgba(255, 255, 255, 0.3) inset;
   position: relative;
   z-index: 1;
+  min-height: calc(100vh - 40px);
 }
 .header-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 20px;
   flex-wrap: wrap;
-  margin-bottom: 24px;
-  padding-bottom: 20px;
+  margin-bottom: 28px;
+  padding-bottom: 24px;
   border-bottom: 2px solid #f1f5f9;
 }
 
 .header-row h1 {
   margin: 0;
-  font-size: 32px;
+  font-size: 36px;
   font-weight: 700;
   color: #0f172a;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
 }
 
 .header-row h1::before {
   content: '🛒';
-  font-size: 28px;
+  font-size: 32px;
 }
 
 .header-actions {
   display: flex;
-  gap: 12px;
+  gap: 14px;
   flex-wrap: wrap;
 }
 
 .controls {
   display: flex;
-  gap: 12px;
-  margin-bottom: 24px;
+  gap: 14px;
+  margin-bottom: 28px;
 }
 
 .search {
   flex: 1;
-  min-width: 280px;
-  padding: 12px 16px 12px 44px;
-  border-radius: 14px;
+  min-width: 320px;
+  padding: 14px 18px 14px 48px;
+  border-radius: 16px;
   border: 2px solid #e2e8f0;
   background: #fafafa;
-  font-size: 15px;
+  font-size: 16px;
   color: #1e293b;
   transition: all 0.25s ease;
   position: relative;
@@ -894,9 +895,9 @@ onMounted(() => {
 .search:focus {
   border-color: #8b5cf6;
   background: #fff;
-  box-shadow: 
+  box-shadow:
     0 0 0 4px rgba(139, 92, 246, 0.12),
-    0 2px 8px rgba(139, 92, 246, 0.1);
+    0 4px 12px rgba(139, 92, 246, 0.15);
   outline: none;
 }
 
@@ -905,14 +906,14 @@ onMounted(() => {
 }
 
 .select {
-  padding: 12px 16px;
-  border-radius: 14px;
+  padding: 14px 18px;
+  border-radius: 16px;
   border: 2px solid #e2e8f0;
   background: #fafafa;
-  font-size: 15px;
+  font-size: 16px;
   color: #1e293b;
   cursor: pointer;
-  min-width: 140px;
+  min-width: 160px;
   transition: all 0.25s ease;
 }
 
@@ -923,9 +924,9 @@ onMounted(() => {
 }
 .list-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 24px;
-  margin-top: 24px;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 28px;
+  margin-top: 28px;
 }
 
 .card {
@@ -961,7 +962,7 @@ onMounted(() => {
 }
 
 .thumb {
-  height: 180px;
+  height: 220px;
   background: linear-gradient(135deg, #f8fafc, #f1f5f9);
   display: flex;
   align-items: center;
@@ -973,7 +974,7 @@ onMounted(() => {
 .thumb::after {
   content: '📦';
   position: absolute;
-  font-size: 48px;
+  font-size: 56px;
   opacity: 0.1;
 }
 
@@ -986,13 +987,13 @@ onMounted(() => {
 }
 
 .card-body {
-  padding: 16px;
+  padding: 20px;
 }
 
 .title {
   font-weight: 700;
-  font-size: 16px;
-  margin-bottom: 12px;
+  font-size: 17px;
+  margin-bottom: 14px;
   color: #0f172a;
   line-height: 1.4;
 }
@@ -1002,18 +1003,18 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   color: #64748b;
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .price {
   color: #dc2626;
   font-weight: 700;
-  font-size: 18px;
+  font-size: 20px;
 }
 
 .seller {
   color: #64748b;
-  font-size: 13px;
+  font-size: 14px;
 }
 .empty {
   text-align: center;
@@ -1040,20 +1041,21 @@ onMounted(() => {
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 16px;
-  margin-top: 32px;
-  padding-top: 24px;
+  gap: 20px;
+  margin-top: 40px;
+  padding-top: 28px;
   border-top: 2px solid #f1f5f9;
 }
 
 .pagination button {
-  padding: 10px 20px;
+  padding: 12px 24px;
   border: 2px solid #8b5cf6;
   background: #fff;
   color: #8b5cf6;
-  border-radius: 12px;
+  border-radius: 14px;
   cursor: pointer;
   font-weight: 600;
+  font-size: 15px;
   transition: all 0.25s ease;
 }
 
@@ -1072,17 +1074,18 @@ onMounted(() => {
 .pagination span {
   color: #64748b;
   font-weight: 500;
+  font-size: 15px;
 }
 
 .btn-primary {
-  padding: 10px 20px;
+  padding: 12px 24px;
   background: linear-gradient(135deg, #4c1d95 0%, #7c3aed 50%, #8b5cf6 100%);
   color: white;
   border: none;
-  border-radius: 12px;
+  border-radius: 14px;
   cursor: pointer;
   font-weight: 600;
-  font-size: 14px;
+  font-size: 15px;
   transition: all 0.25s ease;
   box-shadow: 0 4px 16px rgba(76, 29, 149, 0.3);
 }
@@ -1098,14 +1101,14 @@ onMounted(() => {
 }
 
 .btn-outline {
-  padding: 10px 20px;
+  padding: 12px 24px;
   background: #fff;
   color: #8b5cf6;
   border: 2px solid #8b5cf6;
-  border-radius: 12px;
+  border-radius: 14px;
   cursor: pointer;
   font-weight: 600;
-  font-size: 14px;
+  font-size: 15px;
   transition: all 0.25s ease;
 }
 
@@ -1824,41 +1827,102 @@ onMounted(() => {
 }
 
 /* 响应式设计 */
+@media (max-width: 1200px) {
+  .container {
+    max-width: 100%;
+    margin: 16px;
+    padding: 32px;
+  }
+
+  .list-grid {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 24px;
+  }
+}
+
 @media (max-width: 768px) {
   .secondhand-page {
-    padding: 16px;
+    padding: 12px;
   }
 
   .container {
-    padding: 20px;
+    margin: 12px;
+    padding: 24px;
+    border-radius: 20px;
+    min-height: auto;
   }
 
   .header-row {
     flex-direction: column;
     align-items: flex-start;
     gap: 16px;
+    margin-bottom: 20px;
+    padding-bottom: 16px;
   }
 
   .header-row h1 {
-    font-size: 26px;
+    font-size: 28px;
   }
 
   .header-actions {
     width: 100%;
     flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .btn-primary,
+  .btn-outline {
+    padding: 10px 18px;
+    font-size: 14px;
   }
 
   .controls {
     flex-direction: column;
+    gap: 12px;
+    margin-bottom: 20px;
   }
 
   .search {
     min-width: 100%;
+    padding: 12px 16px 12px 44px;
+  }
+
+  .select {
+    min-width: 100%;
   }
 
   .list-grid {
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 16px;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+  }
+
+  .thumb {
+    height: 180px;
+  }
+
+  .card-body {
+    padding: 16px;
+  }
+
+  .title {
+    font-size: 16px;
+    margin-bottom: 10px;
+  }
+
+  .price {
+    font-size: 18px;
+  }
+
+  .pagination {
+    margin-top: 28px;
+    padding-top: 20px;
+    gap: 12px;
+  }
+
+  .pagination button {
+    padding: 10px 18px;
+    font-size: 14px;
   }
 
   .modal {
@@ -1881,16 +1945,32 @@ onMounted(() => {
 }
 
 @media (max-width: 480px) {
-  .list-grid {
-    grid-template-columns: 1fr;
+  .container {
+    margin: 8px;
+    padding: 16px;
+    border-radius: 16px;
   }
 
-  .header-actions {
-    justify-content: space-between;
+  .header-row h1 {
+    font-size: 24px;
+  }
+
+  .header-row h1::before {
+    font-size: 24px;
+  }
+
+  .list-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
   }
 
   .btn-primary,
   .btn-outline {
+    padding: 8px 16px;
+    font-size: 13px;
+  }
+
+  .pagination button {
     padding: 8px 14px;
     font-size: 13px;
   }
