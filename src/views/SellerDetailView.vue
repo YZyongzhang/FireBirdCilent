@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { getSellerById, getItems } from '@/utils/secondhand'
+import { getSellerById, getItems, getConversation, sendMessage } from '@/utils/secondhand'
 import { getUser } from '@/utils/auth'
 
 const router = useRouter()
@@ -26,11 +26,25 @@ interface Item {
   category?: string
 }
 
+interface Message {
+  id: string | number
+  content: string
+  senderId: number
+  senderUsername: string
+  createdAt: string
+}
+
 const seller = ref<Seller | null>(null)
 const items = ref<Item[]>([])
 const loading = ref(false)
 const sellerLoading = ref(false)
 const error = ref('')
+
+// 聊天相关
+const showChat = ref(false)
+const chatMessages = ref<Message[]>([])
+const chatLoading = ref(false)
+const newMessage = ref('')
 
 onMounted(() => {
   if (user?.role !== 'admin') {
@@ -92,10 +106,50 @@ function viewItemDetail(item: Item) {
 
 async function contactSeller() {
   if (!seller.value) return
-  router.push({
-    path: '/secondhand',
-    query: { contactSellerId: String(seller.value.id), contactSellerName: seller.value.username }
-  })
+  showChat.value = true
+  chatMessages.value = []
+  await fetchChatHistory()
+}
+
+async function fetchChatHistory() {
+  if (!seller.value) return
+  chatLoading.value = true
+  try {
+    const res = await getConversation(seller.value.id)
+    if (res.data) {
+      chatMessages.value = res.data
+    }
+  } catch (e) {
+    console.error('获取聊天记录失败:', e)
+  } finally {
+    chatLoading.value = false
+  }
+}
+
+async function sendChatMessage() {
+  if (!newMessage.value.trim() || !seller.value) return
+  
+  const content = newMessage.value.trim()
+  newMessage.value = ''
+  
+  try {
+    const res = await sendMessage(seller.value.id, content, 'admin')
+    if (res.status === 'ok') {
+      chatMessages.value.push({
+        id: Date.now(),
+        content,
+        senderId: user?.id || 0,
+        senderUsername: user?.username || 'admin',
+        createdAt: new Date().toISOString()
+      })
+    }
+  } catch (e) {
+    console.error('发送消息失败:', e)
+  }
+}
+
+function closeChat() {
+  showChat.value = false
 }
 </script>
 
@@ -192,6 +246,43 @@ async function contactSeller() {
           </div>
         </div>
       </template>
+
+      <!-- 聊天窗口 -->
+      <div v-if="showChat" class="chat-overlay" @click.self="closeChat">
+        <div class="chat-modal">
+          <div class="chat-header">
+            <h3>💬 与 {{ seller?.username }} 聊天</h3>
+            <button class="chat-close" @click="closeChat">✕</button>
+          </div>
+          <div class="chat-messages">
+            <div v-if="chatLoading" class="chat-loading">加载中...</div>
+            <div v-else-if="chatMessages.length === 0" class="chat-empty">
+              暂无消息，开始对话吧！
+            </div>
+            <div
+              v-for="msg in chatMessages"
+              :key="msg.id"
+              class="chat-message"
+              :class="{ 'is-self': msg.senderId === user?.id }"
+            >
+              <div class="message-content">
+                <span class="message-sender">{{ msg.senderUsername }}</span>
+                <p>{{ msg.content }}</p>
+                <span class="message-time">{{ msg.createdAt }}</span>
+              </div>
+            </div>
+          </div>
+          <div class="chat-input">
+            <input
+              v-model="newMessage"
+              type="text"
+              placeholder="输入消息..."
+              @keyup.enter="sendChatMessage"
+            />
+            <button class="btn-send" @click="sendChatMessage">发送</button>
+          </div>
+        </div>
+      </div>
     </main>
   </div>
 </template>
@@ -515,5 +606,170 @@ async function contactSeller() {
   color: #64748b;
   border-radius: 6px;
   font-size: 12px;
+}
+
+/* 聊天窗口样式 */
+.chat-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.chat-modal {
+  width: 90%;
+  max-width: 600px;
+  background: white;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.chat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  background: linear-gradient(135deg, #7c3aed, #8b5cf6);
+  color: white;
+}
+
+.chat-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.chat-close {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.chat-close:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.chat-messages {
+  height: 400px;
+  overflow-y: auto;
+  padding: 20px;
+  background: #f8fafc;
+}
+
+.chat-loading,
+.chat-empty {
+  text-align: center;
+  padding: 40px;
+  color: #94a3b8;
+}
+
+.chat-message {
+  margin-bottom: 16px;
+}
+
+.chat-message.is-self {
+  text-align: right;
+}
+
+.message-content {
+  display: inline-block;
+  max-width: 70%;
+  padding: 12px 16px;
+  border-radius: 16px;
+}
+
+.chat-message:not(.is-self) .message-content {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px 16px 16px 4px;
+}
+
+.chat-message.is-self .message-content {
+  background: linear-gradient(135deg, #7c3aed, #8b5cf6);
+  color: white;
+  border-radius: 16px 16px 4px 16px;
+}
+
+.message-sender {
+  display: block;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.chat-message:not(.is-self) .message-sender {
+  color: #64748b;
+}
+
+.chat-message.is-self .message-sender {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.message-content p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.chat-message:not(.is-self) .message-content p {
+  color: #1e293b;
+}
+
+.message-time {
+  display: block;
+  font-size: 11px;
+  margin-top: 4px;
+  opacity: 0.6;
+}
+
+.chat-input {
+  display: flex;
+  gap: 12px;
+  padding: 16px 20px;
+  background: white;
+  border-top: 2px solid #f1f5f9;
+}
+
+.chat-input input {
+  flex: 1;
+  padding: 14px 16px;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  font-size: 14px;
+  transition: border-color 0.2s ease;
+}
+
+.chat-input input:focus {
+  outline: none;
+  border-color: #7c3aed;
+}
+
+.btn-send {
+  padding: 14px 28px;
+  background: linear-gradient(135deg, #7c3aed, #8b5cf6);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-send:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
 }
 </style>
