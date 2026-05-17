@@ -321,12 +321,6 @@ async function openChat(item: Item) {
   }
 }
 
-const showSellerMessages = ref(false)
-const sellerMessagesLoading = ref(false)
-const sellers = ref<User[]>([])
-const sellersLoading = ref(false)
-const sellersError = ref('')
-
 async function fetchSellerMessages() {
   sellerMessagesLoading.value = true
   try {
@@ -344,7 +338,9 @@ async function fetchSellers() {
   sellersLoading.value = true
   sellersError.value = ''
   try {
+     console.log('Fetching sellers with role:', currentUser.value?.role)
     const res = await getSellers()
+    console.log('Sellers response:', res)
     if (res.status === 'ok') {
       sellers.value = res.data || []
     } else {
@@ -354,6 +350,7 @@ async function fetchSellers() {
   } catch (e: any) {
     sellers.value = []
     sellersError.value = e.message || '获取商家列表失败'
+    console.error('Fetch sellers error:', e)
   } finally {
     sellersLoading.value = false
   }

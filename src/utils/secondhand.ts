@@ -328,14 +328,14 @@ export async function sendMessage(payload: {
 }
 
 export async function getSellers(): Promise<{ status: string; data?: User[] }> {
-  const { data } = await axios.get(`/api/users/sellers`, {
+  const { data } = await axios.get(`${API_BASE}/api/users/sellers`, {
     headers: getHeaders(),
   })
   return data
 }
 
 export async function getSellerById(id: number): Promise<{ status: string; data?: User }> {
-  const { data } = await axios.get(`/api/users/sellers/${id}`, {
+  const { data } = await axios.get(`${API_BASE}/api/users/sellers/${id}`, {
     headers: getHeaders(),
   })
   return data
