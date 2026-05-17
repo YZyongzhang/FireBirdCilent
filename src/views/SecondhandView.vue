@@ -17,6 +17,8 @@ import {
   payOrder,
   getItemReviews,
   submitReview,
+  getMyItems,
+  offlineItem,
   type Item,
   type CartItem,
   type Message,
@@ -49,6 +51,7 @@ const addForm = ref({
   price: '',
   category: '',
 })
+const addImages = ref<File[]>([])
 const addLoading = ref(false)
 
 const showCart = ref(false)
@@ -74,6 +77,10 @@ const ordersLoading = ref(false)
 
 const reviewForm = ref({ rating: 5, comment: '' })
 const reviewLoading = ref(false)
+
+const showMyListings = ref(false)
+const myListings = ref<Item[]>([])
+const myListingsLoading = ref(false)
 
 const loading = ref(false)
 const error = ref('')
@@ -193,14 +200,54 @@ async function handleAddItem() {
       description: addForm.value.description,
       price: parseFloat(addForm.value.price),
       category: addForm.value.category,
+      images: addImages.value.length > 0 ? addImages.value : undefined,
     })
     showAddForm.value = false
     addForm.value = { title: '', description: '', price: '', category: '' }
+    addImages.value = []
     fetchItems()
   } catch (e: any) {
     error.value = '发布商品失败'
   } finally {
     addLoading.value = false
+  }
+}
+
+function handleImageSelect(event: Event) {
+  const input = event.target as HTMLInputElement
+  if (input.files) {
+    addImages.value = Array.from(input.files)
+  }
+}
+
+async function fetchMyListings() {
+  myListingsLoading.value = true
+  try {
+    myListings.value = await getMyItems()
+  } catch (e) {
+    myListings.value = []
+  } finally {
+    myListingsLoading.value = false
+  }
+}
+
+function openMyListings() {
+  showMyListings.value = true
+  fetchMyListings()
+}
+
+async function handleOfflineItem(item: Item) {
+  if (!confirm(`确定要下架商品"${item.title}"吗？`)) return
+  try {
+    const res = await offlineItem(item.id)
+    if (res.success) {
+      alert('下架成功')
+      fetchMyListings()
+    } else {
+      alert(res.message || '下架失败')
+    }
+  } catch (e) {
+    alert('下架失败')
   }
 }
 
@@ -472,6 +519,7 @@ onMounted(() => {
       <div class="top-content">
         <h1 class="page-title">🛒 二手交易</h1>
         <div class="top-actions">
+          <button v-if="isSeller" class="btn-outline" @click="openMyListings">我的发布</button>
           <button v-if="!isSeller" class="btn-outline" @click="openOrders">我的订单</button>
           <button v-if="!isSeller" class="btn-outline" @click="openCart">购物车</button>
           <button v-if="!isSeller" class="btn-outline" @click="openSellerMessages">我的消息</button>
@@ -669,6 +717,13 @@ onMounted(() => {
               </select>
             </div>
           </div>
+          <div class="form-group">
+            <label>商品图片（可选）</label>
+            <input type="file" accept="image/*" multiple @change="handleImageSelect" />
+            <div v-if="addImages.length > 0" class="image-preview">
+              <span>已选择 {{ addImages.length }} 张图片</span>
+            </div>
+          </div>
           <button type="submit" class="btn-primary" :disabled="addLoading">
             {{ addLoading ? '发布中...' : '发布' }}
           </button>
@@ -829,6 +884,39 @@ onMounted(() => {
             <div class="order-footer">
               <span class="order-total">总计：¥{{ o.totalAmount }}</span>
               <span class="order-date">{{ o.date }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="showMyListings" class="modal-overlay" @click.self="showMyListings = false">
+      <div class="modal modal-large">
+        <button class="close" @click="showMyListings = false">关闭</button>
+        <h2>我的发布</h2>
+        <div v-if="myListingsLoading" class="loading">加载中...</div>
+        <div v-else-if="myListings.length === 0" class="empty">暂无发布记录</div>
+        <div v-else class="my-listings-grid">
+          <div v-for="item in myListings" :key="item.id" class="my-listing-item">
+            <div class="listing-image">
+              <img :src="item.thumb || '/placeholder.png'" :alt="item.title" />
+              <span v-if="item.status === 'offline'" class="offline-badge">已下架</span>
+            </div>
+            <div class="listing-info">
+              <h3 class="listing-title">{{ item.title }}</h3>
+              <p class="listing-price">¥{{ item.price }}</p>
+              <p class="listing-meta">
+                {{ item.category }} • {{ item.status === 'available' ? '在售' : '已下架' }}
+              </p>
+            </div>
+            <div class="listing-actions">
+              <button
+                v-if="item.status === 'available'"
+                class="btn-offline"
+                @click="handleOfflineItem(item)"
+              >
+                下架
+              </button>
             </div>
           </div>
         </div>
@@ -2009,6 +2097,120 @@ onMounted(() => {
 .order-date {
   color: #94a3b8;
   font-size: 13px;
+}
+
+/* 图片上传样式 */
+.image-preview {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: #f5f3ff;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #7c3aed;
+}
+
+/* 我的发布样式 */
+.my-listings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+  margin-top: 16px;
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.my-listing-item {
+  display: flex;
+  flex-direction: column;
+  background: #f8fafc;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+  transition: all 0.25s ease;
+}
+
+.my-listing-item:hover {
+  border-color: #8b5cf6;
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(76, 29, 149, 0.15);
+}
+
+.listing-image {
+  height: 160px;
+  background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.listing-image img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.offline-badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: rgba(220, 38, 38, 0.9);
+  color: white;
+  padding: 4px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.listing-info {
+  padding: 16px;
+}
+
+.listing-title {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.listing-price {
+  margin: 0 0 6px;
+  font-size: 20px;
+  font-weight: 700;
+  color: #dc2626;
+}
+
+.listing-meta {
+  margin: 0;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.listing-actions {
+  padding: 12px 16px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.btn-offline {
+  width: 100%;
+  padding: 10px 16px;
+  background: #fef2f2;
+  color: #dc2626;
+  border: 2px solid #fecaca;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+  transition: all 0.25s ease;
+}
+
+.btn-offline:hover {
+  background: #fee2e2;
+  border-color: #dc2626;
 }
 
 /* 响应式设计 */

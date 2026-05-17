@@ -26,6 +26,7 @@ export type Item = {
   sellerName?: string
   date?: string
   category?: string
+  status?: string
 }
 
 export type RawItem = {
@@ -229,6 +230,20 @@ export async function deleteItem(id: string | number): Promise<void> {
   await axios.delete(`${BASE}/items/${id}`, {
     headers: getHeaders(),
   })
+}
+
+export async function getMyItems(): Promise<Item[]> {
+  const { data } = await axios.get<Item[]>(`${BASE}/items/my`, {
+    headers: getHeaders(),
+  })
+  return data
+}
+
+export async function offlineItem(id: string | number): Promise<{ success: boolean; message: string }> {
+  const { data } = await axios.put<{ success: boolean; message: string }>(`${BASE}/items/${id}/offline`, {}, {
+    headers: getHeaders(),
+  })
+  return data
 }
 
 export async function getCategories(): Promise<CategoriesResponse> {

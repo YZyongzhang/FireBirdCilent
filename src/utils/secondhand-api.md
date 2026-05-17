@@ -30,7 +30,8 @@
         "name": string
       },
       "sellerName": string,
-      "date": string
+      "date": string,
+      "status": string
     }
   ],
   "total": number,
@@ -39,7 +40,58 @@
 }
 ```
 
-## 2. 获取分类列表
+## 2. 获取我的发布列表
+
+### 请求
+- **方法**: GET
+- **路径**: `/api/secondhand/items/my`
+- **Headers**:
+  | 参数 | 必填 | 说明 |
+  |------|------|------|
+  | X-User-Id | 是 | 用户ID |
+
+### 响应
+```json
+[
+  {
+    "id": number,
+    "title": string,
+    "description": string,
+    "price": number,
+    "category": string,
+    "thumb": string,
+    "images": string[],
+    "sellerId": number,
+    "sellerName": string,
+    "date": string,
+    "status": "available" | "offline"
+  }
+]
+```
+
+## 3. 商品下架
+
+### 请求
+- **方法**: PUT
+- **路径**: `/api/secondhand/items/{id}/offline`
+- **Headers**:
+  | 参数 | 必填 | 说明 |
+  |------|------|------|
+  | X-User-Id | 是 | 用户ID |
+  | X-User-Role | 是 | 用户角色 |
+
+### 响应
+```json
+{
+  "success": boolean,
+  "message": string
+}
+```
+
+### 权限说明
+- 仅商品发布者或管理员(admin)可以下架商品
+
+## 4. 获取分类列表
 
 ### 请求
 - **方法**: GET
@@ -52,11 +104,12 @@
 }
 ```
 
-## 3. 创建商品
+## 5. 创建商品
 
 ### 请求
 - **方法**: POST
 - **路径**: `/api/secondhand/items`
+- **Content-Type**: `multipart/form-data`
 - **Body**:
   | 参数 | 类型 | 必填 | 说明 |
   |------|------|------|------|
@@ -64,6 +117,7 @@
   | description | string | 否 | 商品描述 |
   | price | number | 是 | 商品价格 |
   | category | string | 是 | 商品分类 |
+  | images | File[] | 否 | 商品图片（支持多张） |
 
 ### 响应
 ```json
@@ -73,11 +127,19 @@
   "description": string,
   "price": number,
   "category": string,
-  "date": string
+  "date": string,
+  "thumb": "http://localhost:80/images/xxx.png",
+  "images": "http://localhost:80/images/xxx.png,http://localhost:80/images/yyy.png",
+  "status": "available"
 }
 ```
 
-## 4. 获取商品评价
+### 图片上传说明
+- 图片上传到 nginx 服务器，路径为 `D:/nginx-1.24.0/html/images/`
+- 返回的 URL 格式为 `http://localhost:80/images/{filename}`
+- 支持多张图片上传，images 字段用逗号分隔
+
+## 6. 获取商品评价
 
 ### 请求
 - **方法**: GET
@@ -99,7 +161,7 @@
 }
 ```
 
-## 5. 提交评价
+## 7. 提交评价
 
 ### 请求
 - **方法**: POST
@@ -122,7 +184,7 @@
 }
 ```
 
-## 6. 获取购物车
+## 8. 获取购物车
 
 ### 请求
 - **方法**: GET
@@ -144,7 +206,7 @@
 }
 ```
 
-## 7. 添加到购物车
+## 9. 添加到购物车
 
 ### 请求
 - **方法**: POST
@@ -162,7 +224,7 @@
 }
 ```
 
-## 8. 更新购物车商品数量
+## 10. 更新购物车商品数量
 
 ### 请求
 - **方法**: PUT
@@ -179,7 +241,7 @@
 }
 ```
 
-## 9. 删除购物车商品
+## 11. 删除购物车商品
 
 ### 请求
 - **方法**: DELETE
@@ -192,7 +254,7 @@
 }
 ```
 
-## 10. 清空购物车
+## 12. 清空购物车
 
 ### 请求
 - **方法**: DELETE
@@ -205,7 +267,7 @@
 }
 ```
 
-## 11. 创建订单
+## 13. 创建订单
 
 ### 请求
 - **方法**: POST
@@ -221,7 +283,7 @@
 }
 ```
 
-## 12. 获取订单列表
+## 14. 获取订单列表
 
 ### 请求
 - **方法**: GET
@@ -249,7 +311,7 @@
 }
 ```
 
-## 13. 支付订单
+## 15. 支付订单
 
 ### 请求
 - **方法**: POST
@@ -266,7 +328,7 @@
 }
 ```
 
-## 14. 获取对话列表
+## 16. 获取对话列表
 
 ### 请求
 - **方法**: GET
@@ -289,7 +351,7 @@
 }
 ```
 
-## 15. 获取对话详情
+## 17. 获取对话详情
 
 ### 请求
 - **方法**: GET
@@ -310,7 +372,7 @@
 }
 ```
 
-## 16. 发送消息
+## 18. 发送消息
 
 ### 请求
 - **方法**: POST
