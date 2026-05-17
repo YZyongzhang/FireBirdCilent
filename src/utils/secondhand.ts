@@ -327,8 +327,8 @@ export async function sendMessage(payload: {
   return data
 }
 
-export async function getUnreadCount(): Promise<UnreadCountResponse> {
-  const { data } = await axios.get(`${BASE}/messages/unread-count`, {
+export async function getSellers(): Promise<{ success: boolean; sellers?: User[] }> {
+  const { data } = await axios.get(`${BASE}/messages/sellers`, {
     headers: getHeaders(),
   })
   return data

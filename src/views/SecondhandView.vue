@@ -311,6 +311,8 @@ async function openChat(item: Item) {
 
 const showSellerMessages = ref(false)
 const sellerMessagesLoading = ref(false)
+const sellers = ref<User[]>([])
+const sellersLoading = ref(false)
 
 async function fetchSellerMessages() {
   sellerMessagesLoading.value = true
@@ -325,9 +327,45 @@ async function fetchSellerMessages() {
   }
 }
 
+async function fetchSellers() {
+  sellersLoading.value = true
+  try {
+    const res = await getSellers()
+    if (res.success) {
+      sellers.value = res.sellers || []
+    }
+  } catch (e) {
+    sellers.value = []
+    console.error('获取商家列表失败:', e)
+  } finally {
+    sellersLoading.value = false
+  }
+}
+
 function openSellerMessages() {
   showSellerMessages.value = true
   fetchSellerMessages()
+}
+
+function openAdminMessages() {
+  showSellerMessages.value = true
+  fetchSellers()
+}
+
+function openChatWithSeller(seller: User) {
+  currentConversation.value = {
+    itemId: 'admin',
+    itemTitle: '系统消息',
+    otherUserId: seller.id,
+    otherUsername: seller.username,
+    lastMessage: '',
+    lastDate: '',
+    unreadCount: 0
+  }
+  showChat.value = true
+  showSellerMessages.value = false
+  chatMessages.value = []
+  chatLoading.value = false
 }
 
 async function openChatFromList(conversation: Conversation) {
@@ -743,29 +781,54 @@ onMounted(() => {
     <div v-if="showSellerMessages" class="modal-overlay" @click.self="showSellerMessages = false">
       <div class="modal modal-large">
         <button class="close" @click="showSellerMessages = false">关闭</button>
-        <h2>{{ isSeller ? '买家消息' : '我的消息' }}</h2>
-        <div v-if="sellerMessagesLoading" class="loading">加载中...</div>
-        <div v-else-if="conversations.length === 0" class="empty">暂无消息</div>
-        <div v-else class="conversation-list">
-          <div 
-            v-for="conv in conversations" 
-            :key="conv.itemId" 
-            class="conversation-item"
-            @click="openChatFromList(conv)"
-          >
-            <div class="conv-product">
-              <span class="conv-product-title">商品：{{ conv.itemTitle }}</span>
-              <span v-if="conv.otherUsername" class="conv-other-user">与 {{ conv.otherUsername }} 的对话</span>
-            </div>
-            <div class="conv-preview">
-              <span class="conv-message">{{ conv.lastMessage }}</span>
-            </div>
-            <div class="conv-meta">
-              <span class="conv-date">{{ conv.lastDate }}</span>
-              <span v-if="conv.unreadCount > 0" class="conv-unread">{{ conv.unreadCount }}</span>
+        <h2>{{ isAdmin ? '商家消息' : (isSeller ? '买家消息' : '我的消息') }}</h2>
+        
+        <!-- 管理员看到商家列表 -->
+        <template v-if="isAdmin">
+          <div v-if="sellersLoading" class="loading">加载中...</div>
+          <div v-else-if="sellers.length === 0" class="empty">暂无商家</div>
+          <div v-else class="conversation-list">
+            <div 
+              v-for="seller in sellers" 
+              :key="seller.id" 
+              class="conversation-item"
+              @click="openChatWithSeller(seller)"
+            >
+              <div class="conv-product">
+                <span class="conv-product-title">商家：{{ seller.username }}</span>
+              </div>
+              <div class="conv-preview">
+                <span class="conv-message">点击发起对话</span>
+              </div>
             </div>
           </div>
-        </div>
+        </template>
+        
+        <!-- 普通用户和商家看到对话列表 -->
+        <template v-else>
+          <div v-if="sellerMessagesLoading" class="loading">加载中...</div>
+          <div v-else-if="conversations.length === 0" class="empty">暂无消息</div>
+          <div v-else class="conversation-list">
+            <div 
+              v-for="conv in conversations" 
+              :key="conv.itemId" 
+              class="conversation-item"
+              @click="openChatFromList(conv)"
+            >
+              <div class="conv-product">
+                <span class="conv-product-title">商品：{{ conv.itemTitle }}</span>
+                <span v-if="conv.otherUsername" class="conv-other-user">与 {{ conv.otherUsername }} 的对话</span>
+              </div>
+              <div class="conv-preview">
+                <span class="conv-message">{{ conv.lastMessage }}</span>
+              </div>
+              <div class="conv-meta">
+                <span class="conv-date">{{ conv.lastDate }}</span>
+                <span v-if="conv.unreadCount > 0" class="conv-unread">{{ conv.unreadCount }}</span>
+              </div>
+            </div>
+          </div>
+        </template>
       </div>
     </div>
 
@@ -808,10 +871,10 @@ onMounted(() => {
           <button class="btn-back" @click="showChat = false; showSellerMessages = true;">← 返回</button>
           <div class="chat-header-info">
             <h2>{{ currentConversation?.itemTitle || '聊天' }}</h2>
-            <span class="chat-product-label">商品咨询</span>
+            <span class="chat-product-label">{{ isAdmin ? '系统通知' : '商品咨询' }}</span>
           </div>
           <div class="chat-other-info">
-            <span class="chat-other-label">{{ isSeller ? '买家' : '卖家' }}：</span>
+            <span class="chat-other-label">{{ isAdmin ? '商家' : (isSeller ? '买家' : '卖家') }}：</span>
             <span class="chat-other-user">{{ currentConversation?.otherUsername }}</span>
           </div>
         </div>
