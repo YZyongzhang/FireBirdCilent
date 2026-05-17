@@ -181,7 +181,7 @@ export async function createItem(payload: {
   price: number
   category: string
   images?: File[]
-}): Promise<Item> {
+}): Promise<{ success: boolean; message?: string; data?: Item }> {
   const formData = new FormData()
   formData.append('title', payload.title)
   formData.append('description', payload.description)
@@ -263,10 +263,11 @@ export async function getCart(): Promise<CartResponse> {
 export async function addToCart(payload: {
   itemId: string | number
   quantity: number
-}): Promise<void> {
-  await axios.post(`${BASE}/cart`, payload, {
+}): Promise<{ success: boolean; message?: string }> {
+  const { data } = await axios.post(`${BASE}/cart`, payload, {
     headers: getHeaders(),
   })
+  return data
 }
 
 export async function updateCartItem(

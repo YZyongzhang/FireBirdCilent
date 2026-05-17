@@ -195,17 +195,21 @@ async function handleAddItem() {
   addLoading.value = true
   error.value = ''
   try {
-    await createItem({
+    const result = await createItem({
       title: addForm.value.title,
       description: addForm.value.description,
       price: parseFloat(addForm.value.price),
       category: addForm.value.category,
       images: addImages.value.length > 0 ? addImages.value : undefined,
     })
-    showAddForm.value = false
-    addForm.value = { title: '', description: '', price: '', category: '' }
-    addImages.value = []
-    fetchItems()
+    if (result.success) {
+      showAddForm.value = false
+      addForm.value = { title: '', description: '', price: '', category: '' }
+      addImages.value = []
+      fetchItems()
+    } else {
+      error.value = result.message || '发布失败'
+    }
   } catch (e: any) {
     error.value = '发布商品失败'
   } finally {
@@ -257,8 +261,12 @@ async function handleAddToCart(it: Item) {
     return
   }
   try {
-    await addToCart({ itemId: it.id, quantity: 1 })
-    alert('已加入购物车')
+    const result = await addToCart({ itemId: it.id, quantity: 1 })
+    if (result.success) {
+      alert('已加入购物车')
+    } else {
+      alert(result.message || '加入购物车失败')
+    }
   } catch (e: any) {
     alert('加入购物车失败')
   }
@@ -520,11 +528,12 @@ onMounted(() => {
         <h1 class="page-title">🛒 二手交易</h1>
         <div class="top-actions">
           <button v-if="isAuthenticated" class="btn-outline" @click="openMyListings">我的发布</button>
-          <button v-if="!isSeller" class="btn-outline" @click="openOrders">我的订单</button>
-          <button v-if="!isSeller" class="btn-outline" @click="openCart">购物车</button>
-          <button v-if="!isSeller" class="btn-outline" @click="openSellerMessages">我的消息</button>
-          <button class="btn-primary" @click="showAddForm = true">发布商品</button>
+          <button v-if="!isSeller && !isAdmin" class="btn-outline" @click="openOrders">我的订单</button>
+          <button v-if="!isSeller && !isAdmin" class="btn-outline" @click="openCart">购物车</button>
+          <button v-if="!isSeller && !isAdmin" class="btn-outline" @click="openSellerMessages">我的消息</button>
+          <button v-if="isSeller" class="btn-primary" @click="showAddForm = true">发布商品</button>
           <button v-if="isSeller" class="btn-outline" @click="openSellerMessages">买家消息</button>
+          <button v-if="isAdmin" class="btn-outline" @click="openAdminMessages">商家消息</button>
         </div>
       </div>
     </header>
