@@ -135,7 +135,7 @@
 ```
 
 ### 图片上传说明
-- 图片上传到 nginx 服务器，路径为 `D:/nginx-1.24.0/html/images/`
+- 图片上传到 nginx 服务器，路径为 `E:/yongzhang/Nginx_server/images/`
 - 返回的 URL 格式为 `http://localhost:80/images/{filename}`
 - 支持多张图片上传，images 字段用逗号分隔
 

@@ -75,7 +75,7 @@
 1. 用户在发布表单选择图片文件
 2. 前端将 File 对象数组添加到 FormData
 3. 后端接收 multipart/form-data 请求
-4. 图片保存到 nginx 服务器目录：`D:/nginx-1.24.0/html/images/`
+4. 图片保存到 nginx 服务器目录：`E:/yongzhang/Nginx_server/images/`
 5. 生成 URL：`http://localhost:80/images/{uuid}_{filename}`
 6. 返回给前端用于展示
 
