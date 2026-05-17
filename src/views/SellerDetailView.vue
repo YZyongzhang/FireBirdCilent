@@ -1,0 +1,519 @@
+<script setup lang="ts">
+import { ref, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+import { getSellerById, getItems } from '@/utils/secondhand'
+import { getUser } from '@/utils/auth'
+
+const router = useRouter()
+const route = useRoute()
+const user = getUser()
+
+interface Seller {
+  id: number
+  username: string
+  phone?: string
+  address?: string
+  businessType?: string
+  description?: string
+}
+
+interface Item {
+  id: string | number
+  title: string
+  price: number
+  thumb?: string
+  status?: string
+  category?: string
+}
+
+const seller = ref<Seller | null>(null)
+const items = ref<Item[]>([])
+const loading = ref(false)
+const sellerLoading = ref(false)
+const error = ref('')
+
+onMounted(() => {
+  if (user?.role !== 'admin') {
+    router.push('/secondhand')
+    return
+  }
+  const sellerId = route.params.sellerId
+  if (sellerId) {
+    fetchSeller(Number(sellerId))
+    fetchSellerItems(Number(sellerId))
+  }
+})
+
+async function fetchSeller(sellerId: number) {
+  sellerLoading.value = true
+  error.value = ''
+  try {
+    const res = await getSellerById(sellerId)
+    if (res.status === 'ok' && res.data) {
+      seller.value = res.data
+    } else {
+      error.value = res.message || '获取商家信息失败'
+    }
+  } catch (e: any) {
+    error.value = e.message || '获取商家信息失败'
+  } finally {
+    sellerLoading.value = false
+  }
+}
+
+async function fetchSellerItems(sellerId: number) {
+  loading.value = true
+  try {
+    const res = await getItems({ page: 1, pageSize: 50, sellerId })
+    if (res.data) {
+      items.value = res.data.filter((item: Item) => item.status === 'available')
+    }
+  } catch (e) {
+    items.value = []
+  } finally {
+    loading.value = false
+  }
+}
+
+function goBack() {
+  router.push('/admin/sellers')
+}
+
+function goToSecondhand() {
+  router.push('/secondhand')
+}
+
+function viewItemDetail(item: Item) {
+  router.push({
+    path: '/secondhand',
+    query: { itemId: String(item.id) }
+  })
+}
+
+async function contactSeller() {
+  if (!seller.value) return
+  router.push({
+    path: '/secondhand',
+    query: { contactSellerId: String(seller.value.id), contactSellerName: seller.value.username }
+  })
+}
+</script>
+
+<template>
+  <div class="seller-detail-page">
+    <header class="page-header">
+      <div class="header-content">
+        <button class="btn-back" @click="goBack">← 返回商家列表</button>
+        <h1 class="page-title">商家详情</h1>
+        <button class="btn-home" @click="goToSecondhand">二手市场</button>
+      </div>
+    </header>
+
+    <main class="page-content">
+      <div v-if="sellerLoading" class="loading-state">
+        <div class="spinner"></div>
+        <p>加载中...</p>
+      </div>
+
+      <div v-else-if="error" class="error-state">
+        <p>{{ error }}</p>
+        <button @click="goBack" class="btn-retry">返回</button>
+      </div>
+
+      <template v-else-if="seller">
+        <div class="seller-profile-card">
+          <div class="profile-header">
+            <div class="profile-avatar">
+              {{ seller.username?.charAt(0).toUpperCase() }}
+            </div>
+            <div class="profile-basic">
+              <h2 class="profile-name">{{ seller.username }}</h2>
+              <span class="profile-badge">商家</span>
+            </div>
+            <button class="btn-contact" @click="contactSeller">
+              💬 联系商家
+            </button>
+          </div>
+
+          <div class="profile-details">
+            <div class="detail-item" v-if="seller.businessType">
+              <span class="detail-icon">📦</span>
+              <span class="detail-label">经营类型</span>
+              <span class="detail-value">{{ seller.businessType }}</span>
+            </div>
+            <div class="detail-item" v-if="seller.phone">
+              <span class="detail-icon">📱</span>
+              <span class="detail-label">手机号</span>
+              <span class="detail-value">{{ seller.phone }}</span>
+            </div>
+            <div class="detail-item" v-if="seller.address">
+              <span class="detail-icon">🏠</span>
+              <span class="detail-label">地址</span>
+              <span class="detail-value">{{ seller.address }}</span>
+            </div>
+          </div>
+
+          <div class="profile-description" v-if="seller.description">
+            <h3>商家简介</h3>
+            <p>{{ seller.description }}</p>
+          </div>
+        </div>
+
+        <div class="products-section">
+          <div class="section-header">
+            <h3>在售商品</h3>
+            <span class="product-count">{{ items.length }} 件</span>
+          </div>
+
+          <div v-if="loading" class="loading-state small">
+            <div class="spinner small"></div>
+          </div>
+
+          <div v-else-if="items.length === 0" class="empty-products">
+            <p>暂无在售商品</p>
+          </div>
+
+          <div v-else class="products-grid">
+            <div
+              v-for="item in items"
+              :key="item.id"
+              class="product-card"
+              @click="viewItemDetail(item)"
+            >
+              <div class="product-image">
+                <img :src="item.thumb || '/placeholder.png'" :alt="item.title" />
+              </div>
+              <div class="product-info">
+                <h4 class="product-title">{{ item.title }}</h4>
+                <p class="product-price">¥{{ item.price }}</p>
+                <span class="product-category">{{ item.category }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
+    </main>
+  </div>
+</template>
+
+<style scoped>
+.seller-detail-page {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #1e1b4b 0%, #312e81 30%, #4c1d95 60%, #7c3aed 100%);
+  padding: 24px;
+}
+
+.page-header {
+  margin-bottom: 32px;
+}
+
+.header-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 20px 24px;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(76, 29, 149, 0.2);
+}
+
+.btn-back,
+.btn-home {
+  padding: 10px 20px;
+  background: #f1f5f9;
+  border: none;
+  border-radius: 10px;
+  color: #64748b;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-back:hover,
+.btn-home:hover {
+  background: #e2e8f0;
+  color: #475569;
+}
+
+.page-title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  color: #1e1b4b;
+}
+
+.page-content {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.loading-state,
+.error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  background: rgba(255, 255, 255, 0.98);
+  border-radius: 20px;
+  color: #64748b;
+}
+
+.loading-state.small {
+  padding: 40px 20px;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #e2e8f0;
+  border-top-color: #7c3aed;
+  border-radius: 50%;
+  animation: spin 0.8s infinite linear;
+  margin-bottom: 16px;
+}
+
+.spinner.small {
+  width: 30px;
+  height: 30px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.error-state {
+  color: #dc2626;
+}
+
+.btn-retry {
+  margin-top: 16px;
+  padding: 10px 24px;
+  background: #7c3aed;
+  color: white;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.seller-profile-card {
+  background: rgba(255, 255, 255, 0.98);
+  border-radius: 20px;
+  padding: 32px;
+  margin-bottom: 24px;
+  box-shadow: 0 8px 32px rgba(76, 29, 149, 0.15);
+}
+
+.profile-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 24px;
+  padding-bottom: 24px;
+  border-bottom: 2px solid #f1f5f9;
+}
+
+.profile-avatar {
+  width: 80px;
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #7c3aed, #8b5cf6);
+  color: white;
+  font-size: 36px;
+  font-weight: 700;
+  border-radius: 20px;
+  margin-right: 20px;
+}
+
+.profile-basic {
+  flex: 1;
+}
+
+.profile-name {
+  margin: 0 0 8px;
+  font-size: 28px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.profile-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  background: linear-gradient(135deg, #7c3aed, #8b5cf6);
+  color: white;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.btn-contact {
+  padding: 14px 28px;
+  background: linear-gradient(135deg, #7c3aed, #8b5cf6);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  box-shadow: 0 4px 16px rgba(124, 58, 237, 0.3);
+}
+
+.btn-contact:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(124, 58, 237, 0.4);
+}
+
+.profile-details {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.detail-item {
+  display: flex;
+  align-items: center;
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 12px;
+}
+
+.detail-icon {
+  font-size: 20px;
+  margin-right: 12px;
+}
+
+.detail-label {
+  color: #64748b;
+  font-size: 14px;
+  margin-right: 12px;
+}
+
+.detail-value {
+  color: #1e293b;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.profile-description {
+  padding: 20px;
+  background: #f8fafc;
+  border-radius: 12px;
+}
+
+.profile-description h3 {
+  margin: 0 0 12px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.profile-description p {
+  margin: 0;
+  color: #475569;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.products-section {
+  background: rgba(255, 255, 255, 0.98);
+  border-radius: 20px;
+  padding: 24px;
+  box-shadow: 0 8px 32px rgba(76, 29, 149, 0.15);
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid #f1f5f9;
+}
+
+.section-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.product-count {
+  color: #64748b;
+  font-size: 14px;
+}
+
+.empty-products {
+  text-align: center;
+  padding: 40px 20px;
+  color: #94a3b8;
+}
+
+.products-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.product-card {
+  background: #f8fafc;
+  border: 2px solid #e2e8f0;
+  border-radius: 16px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.product-card:hover {
+  border-color: #7c3aed;
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(124, 58, 237, 0.15);
+}
+
+.product-image {
+  width: 100%;
+  height: 160px;
+  overflow: hidden;
+  background: #f1f5f9;
+}
+
+.product-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.product-info {
+  padding: 16px;
+}
+
+.product-title {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.product-price {
+  margin: 0 0 8px;
+  font-size: 18px;
+  font-weight: 700;
+  color: #7c3aed;
+}
+
+.product-category {
+  display: inline-block;
+  padding: 4px 10px;
+  background: #f1f5f9;
+  color: #64748b;
+  border-radius: 6px;
+  font-size: 12px;
+}
+</style>

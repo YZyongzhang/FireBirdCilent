@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import {
   getItems,
   getCategories,
@@ -111,13 +112,15 @@ const canContactSeller = computed(() => {
 })
 
 const storedUser = getUser()
-const currentUser = ref<User | null>(storedUser ? { 
-  ...storedUser, 
-  role: storedUser.role as 'user' | 'seller' | 'admin' 
+const currentUser = ref<User | null>(storedUser ? {
+  ...storedUser,
+  role: storedUser.role as 'user' | 'seller' | 'admin'
 } : null)
 const isSeller = computed(() => currentUser.value?.role === 'seller')
 const isAdmin = computed(() => currentUser.value?.role === 'admin')
 const isAuthenticated = computed(() => currentUser.value !== null)
+
+const router = useRouter()
 
 console.log('=== User Info ===')
 console.log('Current user from localStorage:', storedUser)
@@ -374,10 +377,7 @@ function openSellerMessages() {
 }
 
 function openAdminMessages() {
-  showSellerMessages.value = true
-  showSellerDetail.value = false
-  currentSeller.value = null
-  fetchSellers()
+  router.push('/admin/sellers')
 }
 
 function openSellerDetail(seller: User) {
