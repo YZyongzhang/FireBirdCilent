@@ -19,6 +19,7 @@ import {
   submitReview,
   getMyItems,
   offlineItem,
+  getSellers,
   type Item,
   type CartItem,
   type Message,
@@ -313,6 +314,7 @@ const showSellerMessages = ref(false)
 const sellerMessagesLoading = ref(false)
 const sellers = ref<User[]>([])
 const sellersLoading = ref(false)
+const sellersError = ref('')
 
 async function fetchSellerMessages() {
   sellerMessagesLoading.value = true
@@ -329,14 +331,18 @@ async function fetchSellerMessages() {
 
 async function fetchSellers() {
   sellersLoading.value = true
+  sellersError.value = ''
   try {
     const res = await getSellers()
     if (res.success) {
       sellers.value = res.sellers || []
+    } else {
+      sellers.value = []
+      sellersError.value = res.message || '获取商家列表失败'
     }
-  } catch (e) {
+  } catch (e: any) {
     sellers.value = []
-    console.error('获取商家列表失败:', e)
+    sellersError.value = e.message || '获取商家列表失败'
   } finally {
     sellersLoading.value = false
   }
@@ -786,6 +792,7 @@ onMounted(() => {
         <!-- 管理员看到商家列表 -->
         <template v-if="isAdmin">
           <div v-if="sellersLoading" class="loading">加载中...</div>
+          <div v-else-if="sellersError" class="empty error">{{ sellersError }}</div>
           <div v-else-if="sellers.length === 0" class="empty">暂无商家</div>
           <div v-else class="conversation-list">
             <div 
