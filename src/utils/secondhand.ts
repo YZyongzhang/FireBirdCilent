@@ -327,10 +327,30 @@ export async function sendMessage(payload: {
   return data
 }
 
-export async function getSellers(): Promise<{ success: boolean; sellers?: User[] }> {
-  const { data } = await axios.get(`${BASE}/messages/sellers`, {
+export async function getSellers(): Promise<{ status: string; data?: User[] }> {
+  const { data } = await axios.get(`/api/users/sellers`, {
     headers: getHeaders(),
   })
+  return data
+}
+
+export async function getSellerById(id: number): Promise<{ status: string; data?: User }> {
+  const { data } = await axios.get(`/api/users/sellers/${id}`, {
+    headers: getHeaders(),
+  })
+  return data
+}
+
+export async function registerSeller(payload: {
+  username: string
+  password: string
+  phone: string
+  idCard: string
+  address: string
+  businessType: string
+  description: string
+}): Promise<{ status: string; message?: string }> {
+  const { data } = await axios.post(`/api/users/register/seller`, payload)
   return data
 }
 

@@ -61,19 +61,59 @@ const regPassword = ref('')
 const regConfirm = ref('')
 const regEmail = ref('')
 const regRole = ref<'user' | 'seller' | 'admin'>('user')
+
+// 商家注册额外信息
+const regPhone = ref('')
+const regIdCard = ref('')
+const regAddress = ref('')
+const regBusinessType = ref('')
+const regDescription = ref('')
+
 const handleRegister = async () => {
   if (regPassword.value !== regConfirm.value) {
     errorMessage.value = '两次输入的密码不一致'
     return
   }
+  
+  // 商家注册需要额外验证
+  if (regRole.value === 'seller') {
+    if (!regPhone.value.trim()) {
+      errorMessage.value = '请输入手机号'
+      return
+    }
+    if (!regIdCard.value.trim()) {
+      errorMessage.value = '请输入身份证号'
+      return
+    }
+    if (!regAddress.value.trim()) {
+      errorMessage.value = '请输入地址'
+      return
+    }
+  }
+  
   loading.value = true
   try {
-    const res = await axios.post(`${API_BASE}/register`, {
-      username: regUsername.value,
-      password: regPassword.value,
-      email: regEmail.value,
-      role: regRole.value,
-    })
+    let res
+    if (regRole.value === 'seller') {
+      // 商家注册调用专用接口
+      res = await axios.post(`${API_BASE}/users/register/seller`, {
+        username: regUsername.value,
+        password: regPassword.value,
+        phone: regPhone.value,
+        idCard: regIdCard.value,
+        address: regAddress.value,
+        businessType: regBusinessType.value,
+        description: regDescription.value,
+      })
+    } else {
+      // 普通注册
+      res = await axios.post(`${API_BASE}/register`, {
+        username: regUsername.value,
+        password: regPassword.value,
+        email: regEmail.value,
+        role: regRole.value,
+      })
+    }
     if (res.data.status === 'ok') {
       router.push('/login')
     } else {
@@ -431,6 +471,62 @@ onUnmounted(() => {
             <option value="seller">卖家</option>
             <option value="admin">管理员</option>
           </select>
+        </div>
+
+        <!-- 商家额外信息 -->
+        <div v-if="regRole === 'seller'" class="seller-fields">
+          <div class="section-title">商家信息</div>
+          
+          <div class="input-wrapper">
+            <span class="input-icon">📱</span>
+            <input 
+              v-model="regPhone" 
+              type="tel" 
+              placeholder="请输入手机号"
+              :disabled="loading"
+            />
+          </div>
+
+          <div class="input-wrapper">
+            <span class="input-icon">🆔</span>
+            <input 
+              v-model="regIdCard" 
+              type="text" 
+              placeholder="请输入身份证号"
+              :disabled="loading"
+            />
+          </div>
+
+          <div class="input-wrapper">
+            <span class="input-icon">🏠</span>
+            <input 
+              v-model="regAddress" 
+              type="text" 
+              placeholder="请输入地址"
+              :disabled="loading"
+            />
+          </div>
+
+          <div class="input-wrapper">
+            <span class="input-icon">📦</span>
+            <input 
+              v-model="regBusinessType" 
+              type="text" 
+              placeholder="经营类型（如：电子产品、服装等）"
+              :disabled="loading"
+            />
+          </div>
+
+          <div class="input-wrapper">
+            <span class="input-icon">📝</span>
+            <textarea 
+              v-model="regDescription" 
+              rows="3"
+              placeholder="商家简介（可选）"
+              :disabled="loading"
+              class="textarea"
+            ></textarea>
+          </div>
         </div>
 
         <div class="input-wrapper">

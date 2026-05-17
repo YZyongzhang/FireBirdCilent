@@ -83,6 +83,17 @@ const showMyListings = ref(false)
 const myListings = ref<Item[]>([])
 const myListingsLoading = ref(false)
 
+// 商家管理相关（管理员）
+const showSellerMessages = ref(false)
+const sellerMessagesLoading = ref(false)
+const sellers = ref<User[]>([])
+const sellersLoading = ref(false)
+const sellersError = ref('')
+const showSellerDetail = ref(false)
+const currentSeller = ref<User | null>(null)
+const sellerItems = ref<Item[]>([])
+const sellerItemsLoading = ref(false)
+
 const loading = ref(false)
 const error = ref('')
 
@@ -334,8 +345,8 @@ async function fetchSellers() {
   sellersError.value = ''
   try {
     const res = await getSellers()
-    if (res.success) {
-      sellers.value = res.sellers || []
+    if (res.status === 'ok') {
+      sellers.value = res.data || []
     } else {
       sellers.value = []
       sellersError.value = res.message || '获取商家列表失败'
@@ -348,6 +359,18 @@ async function fetchSellers() {
   }
 }
 
+async function fetchSellerItems(sellerId: number) {
+  sellerItemsLoading.value = true
+  try {
+    const res = await getItems({ page: 1, pageSize: 20, sellerId })
+    sellerItems.value = res.data || []
+  } catch (e) {
+    sellerItems.value = []
+  } finally {
+    sellerItemsLoading.value = false
+  }
+}
+
 function openSellerMessages() {
   showSellerMessages.value = true
   fetchSellerMessages()
@@ -355,20 +378,36 @@ function openSellerMessages() {
 
 function openAdminMessages() {
   showSellerMessages.value = true
+  showSellerDetail.value = false
+  currentSeller.value = null
   fetchSellers()
 }
 
-function openChatWithSeller(seller: User) {
+function openSellerDetail(seller: User) {
+  currentSeller.value = seller
+  showSellerDetail.value = true
+  fetchSellerItems(seller.id!)
+}
+
+function closeSellerDetail() {
+  showSellerDetail.value = false
+  currentSeller.value = null
+  sellerItems.value = []
+}
+
+function chatWithSeller() {
+  if (!currentSeller.value) return
   currentConversation.value = {
     itemId: 'admin',
     itemTitle: '系统消息',
-    otherUserId: seller.id,
-    otherUsername: seller.username,
+    otherUserId: currentSeller.value.id,
+    otherUsername: currentSeller.value.username,
     lastMessage: '',
     lastDate: '',
     unreadCount: 0
   }
   showChat.value = true
+  showSellerDetail.value = false
   showSellerMessages.value = false
   chatMessages.value = []
   chatLoading.value = false
@@ -577,7 +616,7 @@ onMounted(() => {
           <button v-if="!isSeller && !isAdmin" class="btn-outline" @click="openSellerMessages">我的消息</button>
           <button v-if="isSeller" class="btn-primary" @click="showAddForm = true">发布商品</button>
           <button v-if="isSeller" class="btn-outline" @click="openSellerMessages">买家消息</button>
-          <button v-if="isAdmin" class="btn-outline" @click="openAdminMessages">商家消息</button>
+          <button v-if="isAdmin" class="btn-outline" @click="openAdminMessages">商家</button>
         </div>
       </div>
     </header>
@@ -787,28 +826,84 @@ onMounted(() => {
     <div v-if="showSellerMessages" class="modal-overlay" @click.self="showSellerMessages = false">
       <div class="modal modal-large">
         <button class="close" @click="showSellerMessages = false">关闭</button>
-        <h2>{{ isAdmin ? '商家消息' : (isSeller ? '买家消息' : '我的消息') }}</h2>
+        <h2>{{ isAdmin ? '商家' : (isSeller ? '买家消息' : '我的消息') }}</h2>
         
         <!-- 管理员看到商家列表 -->
         <template v-if="isAdmin">
-          <div v-if="sellersLoading" class="loading">加载中...</div>
-          <div v-else-if="sellersError" class="empty error">{{ sellersError }}</div>
-          <div v-else-if="sellers.length === 0" class="empty">暂无商家</div>
-          <div v-else class="conversation-list">
-            <div 
-              v-for="seller in sellers" 
-              :key="seller.id" 
-              class="conversation-item"
-              @click="openChatWithSeller(seller)"
-            >
-              <div class="conv-product">
-                <span class="conv-product-title">商家：{{ seller.username }}</span>
-              </div>
-              <div class="conv-preview">
-                <span class="conv-message">点击发起对话</span>
+          <!-- 商家列表 -->
+          <template v-if="!showSellerDetail">
+            <div v-if="sellersLoading" class="loading">加载中...</div>
+            <div v-else-if="sellersError" class="empty error">{{ sellersError }}</div>
+            <div v-else-if="sellers.length === 0" class="empty">暂无商家</div>
+            <div v-else class="seller-list">
+              <div 
+                v-for="seller in sellers" 
+                :key="seller.id" 
+                class="seller-card"
+                @click="openSellerDetail(seller)"
+              >
+                <div class="seller-info">
+                  <h3 class="seller-name">{{ seller.username }}</h3>
+                  <p class="seller-business-type" v-if="seller.businessType">{{ seller.businessType }}</p>
+                  <p class="seller-address" v-if="seller.address">{{ seller.address }}</p>
+                  <p class="seller-phone" v-if="seller.phone">{{ seller.phone }}</p>
+                </div>
+                <div class="seller-actions">
+                  <span class="view-detail">查看详情 →</span>
+                </div>
               </div>
             </div>
-          </div>
+          </template>
+          
+          <!-- 商家详情 -->
+          <template v-else>
+            <div class="seller-detail">
+              <button class="btn-back" @click="closeSellerDetail">← 返回商家列表</button>
+              <div class="seller-header">
+                <div class="seller-basic-info">
+                  <h2 class="seller-title">{{ currentSeller?.username }}</h2>
+                  <div class="seller-meta">
+                    <span class="meta-item" v-if="currentSeller?.businessType">
+                      📦 {{ currentSeller?.businessType }}
+                    </span>
+                    <span class="meta-item" v-if="currentSeller?.phone">
+                      📱 {{ currentSeller?.phone }}
+                    </span>
+                    <span class="meta-item" v-if="currentSeller?.address">
+                      🏠 {{ currentSeller?.address }}
+                    </span>
+                  </div>
+                  <p class="seller-description" v-if="currentSeller?.description">{{ currentSeller?.description }}</p>
+                </div>
+                <button class="btn-contact" @click="chatWithSeller">联系商家</button>
+              </div>
+              
+              <div class="seller-products">
+                <h3>发布的商品</h3>
+                <div v-if="sellerItemsLoading" class="loading">加载中...</div>
+                <div v-else-if="sellerItems.length === 0" class="empty">暂无商品</div>
+                <div v-else class="products-grid">
+                  <div 
+                    v-for="item in sellerItems" 
+                    :key="item.id" 
+                    class="product-item"
+                    @click="openDetail(item)"
+                  >
+                    <div class="product-image">
+                      <img :src="item.thumb || '/placeholder.png'" :alt="item.title" />
+                    </div>
+                    <div class="product-info">
+                      <h4 class="product-title">{{ item.title }}</h4>
+                      <p class="product-price">¥{{ item.price }}</p>
+                      <p class="product-status" :class="{ offline: item.status === 'offline' }">
+                        {{ item.status === 'available' ? '在售' : '已下架' }}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </template>
         </template>
         
         <!-- 普通用户和商家看到对话列表 -->
