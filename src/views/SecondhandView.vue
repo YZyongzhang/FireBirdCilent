@@ -519,7 +519,7 @@ onMounted(() => {
       <div class="top-content">
         <h1 class="page-title">🛒 二手交易</h1>
         <div class="top-actions">
-          <button v-if="isSeller" class="btn-outline" @click="openMyListings">我的发布</button>
+          <button v-if="isAuthenticated" class="btn-outline" @click="openMyListings">我的发布</button>
           <button v-if="!isSeller" class="btn-outline" @click="openOrders">我的订单</button>
           <button v-if="!isSeller" class="btn-outline" @click="openCart">购物车</button>
           <button v-if="!isSeller" class="btn-outline" @click="openSellerMessages">我的消息</button>
