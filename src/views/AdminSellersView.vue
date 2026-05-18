@@ -3,20 +3,12 @@ import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { getSellers } from '@/utils/secondhand'
 import { getUser } from '@/utils/auth'
+import type { User } from '@/utils/user'
 
 const router = useRouter()
 const user = getUser()
 
-interface Seller {
-  id: number
-  username: string
-  phone?: string
-  address?: string
-  businessType?: string
-  description?: string
-}
-
-const sellers = ref<Seller[]>([])
+const sellers = ref<User[]>([])
 const loading = ref(false)
 const error = ref('')
 
@@ -92,7 +84,7 @@ function goBack() {
             v-for="seller in sellers"
             :key="seller.id"
             class="seller-card"
-            @click="goToSellerDetail(seller.id)"
+            @click="goToSellerDetail(Number(seller.id))"
           >
             <div class="seller-avatar">
               {{ seller.username?.charAt(0).toUpperCase() }}

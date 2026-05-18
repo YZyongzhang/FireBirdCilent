@@ -10,6 +10,11 @@ export interface User {
   password?: string
   role: UserRole
   email?: string
+  phone?: string
+  idCard?: string
+  address?: string
+  businessType?: string
+  description?: string
 }
 
 export interface UserResponse {

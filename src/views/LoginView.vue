@@ -8,7 +8,7 @@ import { saveUser } from '../utils/auth'
 const router = useRouter()
 
 // 通用状态
-const mode = ref<'account' | 'sms' | 'qr' | 'register'>('account')
+const mode = ref<'account' | 'sms' | 'qr' | 'register'>('account') //登录选择，首先默认account
 const errorMessage = ref('')
 const loading = ref(false)
 
@@ -326,7 +326,8 @@ onUnmounted(() => {
       </nav>
 
       <!-- 账号密码登录 -->
-      <form v-if="mode === 'account'" class="login-form" @submit.prevent="handleAccountLogin">
+        <!--  阻止浏览器默认行为使得页面刷新 -->
+      <form v-if="mode === 'account'" class="login-form" @submit.prevent="handleAccountLogin"> 
         <div class="input-wrapper">
           <span class="input-icon">👤</span>
           <input 

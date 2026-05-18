@@ -362,8 +362,8 @@ async function fetchSellers() {
 async function fetchSellerItems(sellerId: number) {
   sellerItemsLoading.value = true
   try {
-    const res = await getItems({ page: 1, pageSize: 20, sellerId })
-    sellerItems.value = res.data || []
+    const res = await getItems({ page: 1, size: 20 })
+    sellerItems.value = res.items.filter((item: Item) => item.seller?.id === sellerId) || []
   } catch (e) {
     sellerItems.value = []
   } finally {
@@ -383,7 +383,7 @@ function openAdminMessages() {
 function openSellerDetail(seller: User) {
   currentSeller.value = seller
   showSellerDetail.value = true
-  fetchSellerItems(seller.id!)
+  fetchSellerItems(Number(seller.id))
 }
 
 function closeSellerDetail() {

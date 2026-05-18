@@ -1,40 +1,15 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { getSellerById, getItems, getConversation, sendMessage } from '@/utils/secondhand'
+import { getSellerById, getItems, getConversation, sendMessage, type Item, type Message } from '@/utils/secondhand'
 import { getUser } from '@/utils/auth'
+import type { User } from '@/utils/user'
 
 const router = useRouter()
 const route = useRoute()
 const user = getUser()
 
-interface Seller {
-  id: number
-  username: string
-  phone?: string
-  address?: string
-  businessType?: string
-  description?: string
-}
-
-interface Item {
-  id: string | number
-  title: string
-  price: number
-  thumb?: string
-  status?: string
-  category?: string
-}
-
-interface Message {
-  id: string | number
-  content: string
-  senderId: number
-  senderUsername: string
-  createdAt: string
-}
-
-const seller = ref<Seller | null>(null)
+const seller = ref<User | null>(null)
 const items = ref<Item[]>([])
 const loading = ref(false)
 const sellerLoading = ref(false)
@@ -78,10 +53,8 @@ async function fetchSeller(sellerId: number) {
 async function fetchSellerItems(sellerId: number) {
   loading.value = true
   try {
-    const res = await getItems({ page: 1, pageSize: 50, sellerId })
-    if (res.data) {
-      items.value = res.data.filter((item: Item) => item.status === 'available')
-    }
+    const res = await getItems({ page: 1, size: 50 })
+    items.value = res.items.filter((item: Item) => item.seller?.id === sellerId && item.status === 'available')
   } catch (e) {
     items.value = []
   } finally {
@@ -115,9 +88,9 @@ async function fetchChatHistory() {
   if (!seller.value) return
   chatLoading.value = true
   try {
-    const res = await getConversation(seller.value.id)
-    if (res.data) {
-      chatMessages.value = res.data
+    const res = await getConversation(seller.value.id, 'admin')
+    if (res.messages) {
+      chatMessages.value = res.messages
     }
   } catch (e) {
     console.error('获取聊天记录失败:', e)
@@ -133,14 +106,20 @@ async function sendChatMessage() {
   newMessage.value = ''
   
   try {
-    const res = await sendMessage(seller.value.id, content, 'admin')
+    const res = await sendMessage({
+      toUserId: seller.value.id,
+      content,
+      itemId: 'admin',
+      itemTitle: '系统消息'
+    })
     if (res.status === 'ok') {
       chatMessages.value.push({
         id: Date.now(),
+        fromUserId: Number(user?.id) || 0,
+        fromUsername: user?.username || 'admin',
+        toUserId: seller.value.id,
         content,
-        senderId: user?.id || 0,
-        senderUsername: user?.username || 'admin',
-        createdAt: new Date().toISOString()
+        date: new Date().toISOString()
       })
     }
   } catch (e) {
@@ -263,12 +242,12 @@ function closeChat() {
               v-for="msg in chatMessages"
               :key="msg.id"
               class="chat-message"
-              :class="{ 'is-self': msg.senderId === user?.id }"
+              :class="{ 'is-self': msg.fromUserId === user?.id }"
             >
               <div class="message-content">
-                <span class="message-sender">{{ msg.senderUsername }}</span>
+                <span class="message-sender">{{ msg.fromUsername }}</span>
                 <p>{{ msg.content }}</p>
-                <span class="message-time">{{ msg.createdAt }}</span>
+                <span class="message-time">{{ msg.date }}</span>
               </div>
             </div>
           </div>

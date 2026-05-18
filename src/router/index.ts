@@ -9,7 +9,7 @@ import SellerDetailView from '@/views/SellerDetailView.vue'
 import { getUser, clearUser } from '@/utils/auth'
 
 const router = createRouter({
-  history: createWebHistory(import.meta.env.BASE_URL),
+  history: createWebHistory(import.meta.env.BASE_URL), // 通过调用浏览器内部的history接口然后进行url的跳转，vue进行匹配路由，实现路由的切换。
   routes: [
     {
       path: '/',

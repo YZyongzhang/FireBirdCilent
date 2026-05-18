@@ -1,6 +1,7 @@
 import axios from 'axios'
 import { API_BASE } from '@/config'
 import { getUser } from './auth'
+import type { User } from './user'
 
 const BASE = `${API_BASE}/secondhand`
 
@@ -327,14 +328,14 @@ export async function sendMessage(payload: {
   return data
 }
 
-export async function getSellers(): Promise<{ status: string; data?: User[] }> {
+export async function getSellers(): Promise<{ status: string; message?: string; data?: User[] }> {
   const { data } = await axios.get(`${API_BASE}/api/users/sellers`, {
     headers: getHeaders(),
   })
   return data
 }
 
-export async function getSellerById(id: number): Promise<{ status: string; data?: User }> {
+export async function getSellerById(id: number): Promise<{ status: string; message?: string; data?: User }> {
   const { data } = await axios.get(`${API_BASE}/api/users/sellers/${id}`, {
     headers: getHeaders(),
   })
