@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { getSellers } from '@/utils/secondhand'
+import { getSellers, getPendingSellers, reviewSeller } from '@/utils/secondhand'
 import { getUser } from '@/utils/auth'
 import type { User } from '@/utils/user'
 
@@ -9,7 +9,10 @@ const router = useRouter()
 const user = getUser()
 
 const sellers = ref<User[]>([])
+const pendingSellers = ref<User[]>([])
+const activeTab = ref<'all' | 'pending'>('all')
 const loading = ref(false)
+const pendingLoading = ref(false)
 const error = ref('')
 
 onMounted(() => {
@@ -18,6 +21,7 @@ onMounted(() => {
     return
   }
   fetchSellers()
+  fetchPendingSellers()
 })
 
 async function fetchSellers() {
@@ -37,6 +41,54 @@ async function fetchSellers() {
   }
 }
 
+async function fetchPendingSellers() {
+  pendingLoading.value = true
+  try {
+    const res = await getPendingSellers()
+    if (res.status === 'ok') {
+      pendingSellers.value = res.data || []
+    }
+  } catch (e: any) {
+    console.error('获取待审核商家失败:', e)
+  } finally {
+    pendingLoading.value = false
+  }
+}
+
+async function handleApprove(seller: User) {
+  if (!confirm(`确定要通过 ${seller.username} 的商家申请吗？`)) return
+  
+  try {
+    const res = await reviewSeller(Number(seller.id), 'approve')
+    if (res.status === 'ok') {
+      alert(res.message || '审核通过')
+      fetchPendingSellers()
+      fetchSellers()
+    } else {
+      alert(res.message || '操作失败')
+    }
+  } catch (e: any) {
+    alert('审核失败: ' + (e.message || '网络错误'))
+  }
+}
+
+async function handleReject(seller: User) {
+  if (!confirm(`确定要拒绝 ${seller.username} 的商家申请吗？`)) return
+  
+  try {
+    const res = await reviewSeller(Number(seller.id), 'reject')
+    if (res.status === 'ok') {
+      alert(res.message || '已拒绝')
+      fetchPendingSellers()
+      fetchSellers()
+    } else {
+      alert(res.message || '操作失败')
+    }
+  } catch (e: any) {
+    alert('操作失败: ' + (e.message || '网络错误'))
+  }
+}
+
 function goToSellerDetail(sellerId: number) {
   router.push(`/admin/sellers/${sellerId}`)
 }
@@ -44,6 +96,13 @@ function goToSellerDetail(sellerId: number) {
 function goBack() {
   router.push('/secondhand')
 }
+
+const currentSellers = computed(() => {
+  if (activeTab.value === 'pending') {
+    return pendingSellers.value
+  }
+  return sellers.value
+})
 </script>
 
 <template>
@@ -62,10 +121,25 @@ function goBack() {
       <div class="content-card">
         <div class="card-header">
           <h2>商家列表</h2>
-          <span class="seller-count">共 {{ sellers.length }} 个商家</span>
+          <div class="tabs">
+            <button 
+              :class="{ active: activeTab === 'all' }" 
+              @click="activeTab = 'all'"
+            >
+              全部商家
+              <span class="tab-count">{{ sellers.length }}</span>
+            </button>
+            <button 
+              :class="{ active: activeTab === 'pending' }" 
+              @click="activeTab = 'pending'"
+            >
+              待审核
+              <span class="tab-count pending">{{ pendingSellers.length }}</span>
+            </button>
+          </div>
         </div>
 
-        <div v-if="loading" class="loading-state">
+        <div v-if="loading || pendingLoading" class="loading-state">
           <div class="spinner"></div>
           <p>加载中...</p>
         </div>
@@ -75,22 +149,26 @@ function goBack() {
           <button @click="fetchSellers" class="btn-retry">重试</button>
         </div>
 
-        <div v-else-if="sellers.length === 0" class="empty-state">
-          <p>暂无商家</p>
+        <div v-else-if="currentSellers.length === 0" class="empty-state">
+          <p>{{ activeTab === 'pending' ? '暂无待审核商家' : '暂无商家' }}</p>
         </div>
 
         <div v-else class="sellers-grid">
           <div
-            v-for="seller in sellers"
+            v-for="seller in currentSellers"
             :key="seller.id"
             class="seller-card"
-            @click="goToSellerDetail(Number(seller.id))"
           >
             <div class="seller-avatar">
               {{ seller.username?.charAt(0).toUpperCase() }}
             </div>
             <div class="seller-info">
-              <h3 class="seller-name">{{ seller.username }}</h3>
+              <div class="seller-name-row">
+                <h3 class="seller-name">{{ seller.username }}</h3>
+                <span v-if="seller.status === 'pending'" class="status-badge pending">待审核</span>
+                <span v-else-if="seller.status === 'approved'" class="status-badge approved">已通过</span>
+                <span v-else-if="seller.status === 'rejected'" class="status-badge rejected">已拒绝</span>
+              </div>
               <p class="seller-meta" v-if="seller.businessType">
                 📦 {{ seller.businessType }}
               </p>
@@ -100,8 +178,33 @@ function goBack() {
               <p class="seller-meta" v-if="seller.address">
                 🏠 {{ seller.address }}
               </p>
+              <p class="seller-meta description" v-if="seller.description">
+                📝 {{ seller.description }}
+              </p>
             </div>
-            <div class="seller-arrow">→</div>
+            <div class="seller-actions">
+              <button 
+                v-if="activeTab === 'pending'" 
+                class="btn-approve" 
+                @click="handleApprove(seller)"
+              >
+                ✓ 通过
+              </button>
+              <button 
+                v-if="activeTab === 'pending'" 
+                class="btn-reject" 
+                @click="handleReject(seller)"
+              >
+                ✗ 拒绝
+              </button>
+              <button 
+                v-else 
+                class="btn-detail" 
+                @click="goToSellerDetail(Number(seller.id))"
+              >
+                详情 →
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -197,9 +300,49 @@ function goBack() {
   color: #1e1b4b;
 }
 
-.seller-count {
-  color: #64748b;
+.tabs {
+  display: flex;
+  gap: 8px;
+}
+
+.tabs button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: #f1f5f9;
+  border: none;
+  border-radius: 10px;
   font-size: 14px;
+  font-weight: 500;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tabs button:hover {
+  background: #e2e8f0;
+}
+
+.tabs button.active {
+  background: linear-gradient(135deg, #7c3aed, #8b5cf6);
+  color: white;
+}
+
+.tab-count {
+  padding: 2px 8px;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 10px;
+  font-size: 12px;
+}
+
+.tabs button.active .tab-count {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.tab-count.pending {
+  background: #fef3c7;
+  color: #d97706;
 }
 
 .loading-state,
@@ -250,12 +393,11 @@ function goBack() {
 
 .seller-card {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   padding: 20px;
   background: #f8fafc;
   border: 2px solid #e2e8f0;
   border-radius: 16px;
-  cursor: pointer;
   transition: all 0.25s ease;
 }
 
@@ -264,6 +406,12 @@ function goBack() {
   background: #faf5ff;
   transform: translateY(-2px);
   box-shadow: 0 4px 16px rgba(124, 58, 237, 0.15);
+}
+
+.seller-card-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 16px;
 }
 
 .seller-avatar {
@@ -286,11 +434,40 @@ function goBack() {
   min-width: 0;
 }
 
+.seller-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
 .seller-name {
-  margin: 0 0 8px;
+  margin: 0;
   font-size: 16px;
   font-weight: 700;
   color: #1e293b;
+}
+
+.status-badge {
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.status-badge.pending {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.status-badge.approved {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.status-badge.rejected {
+  background: #fee2e2;
+  color: #dc2626;
 }
 
 .seller-meta {
@@ -302,15 +479,73 @@ function goBack() {
   text-overflow: ellipsis;
 }
 
-.seller-arrow {
-  font-size: 20px;
-  color: #94a3b8;
-  margin-left: 12px;
-  transition: transform 0.2s ease;
+.seller-meta.description {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+  max-height: 40px;
+  line-height: 1.4;
 }
 
-.seller-card:hover .seller-arrow {
-  transform: translateX(4px);
-  color: #7c3aed;
+.seller-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.btn-approve {
+  flex: 1;
+  padding: 12px;
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.btn-approve:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.btn-reject {
+  flex: 1;
+  padding: 12px;
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.btn-reject:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+.btn-detail {
+  width: 100%;
+  padding: 12px;
+  background: linear-gradient(135deg, #7c3aed, #8b5cf6);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.btn-detail:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
 }
 </style>

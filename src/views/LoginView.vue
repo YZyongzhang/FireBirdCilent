@@ -11,6 +11,12 @@ const router = useRouter()
 const mode = ref<'account' | 'sms' | 'qr' | 'register'>('account') //登录选择，首先默认account
 const errorMessage = ref('')
 const loading = ref(false)
+const showSellerReviewModal = ref(false)
+
+const handleModalClose = () => {
+  showSellerReviewModal.value = false
+  router.push('/login')
+}
 
 // 账号密码登录
 const username = ref('')
@@ -96,7 +102,7 @@ const handleRegister = async () => {
     let res
     if (regRole.value === 'seller') {
       // 商家注册调用专用接口
-      res = await axios.post(`${API_BASE}/users/register/seller`, {
+      res = await axios.post(`${API_BASE}/api/users/register/seller`, {
         username: regUsername.value,
         password: regPassword.value,
         phone: regPhone.value,
@@ -115,7 +121,11 @@ const handleRegister = async () => {
       })
     }
     if (res.data.status === 'ok') {
-      router.push('/login')
+      if (regRole.value === 'seller') {
+        showSellerReviewModal.value = true
+      } else {
+        router.push('/login')
+      }
     } else {
       errorMessage.value = res.data?.message || '注册失败'
     }
@@ -579,6 +589,19 @@ onUnmounted(() => {
 
       </div>
     </section>
+
+    <!-- 商家审核提示弹窗 -->
+    <div v-if="showSellerReviewModal" class="modal-overlay" @click.self="showSellerReviewModal = false">
+      <div class="modal-content">
+        <div class="modal-icon">📋</div>
+        <h2 class="modal-title">注册成功</h2>
+        <p class="modal-message">您的商家注册信息已提交，等待管理员审核</p>
+        <p class="modal-hint">审核通过后，您将收到通知，届时可以使用商家账号登录</p>
+        <button class="modal-button" @click="handleModalClose">
+          我知道了
+        </button>
+      </div>
+    </div>
   </main>
 </template>
 
@@ -1187,5 +1210,94 @@ onUnmounted(() => {
 
 .refresh-qr:hover {
   background: #e2e8f0;
+}
+
+/* 弹窗遮罩 */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* 弹窗内容 */
+.modal-content {
+  background: #fff;
+  border-radius: 20px;
+  padding: 40px;
+  max-width: 400px;
+  width: 90%;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.modal-icon {
+  font-size: 64px;
+  margin-bottom: 20px;
+}
+
+.modal-title {
+  margin: 0 0 12px;
+  color: #0f172a;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.modal-message {
+  margin: 0 0 8px;
+  color: #334155;
+  font-size: 16px;
+}
+
+.modal-hint {
+  margin: 0 0 24px;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.modal-button {
+  padding: 14px 32px;
+  border: none;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #4c1d95 0%, #7c3aed 100%);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  box-shadow: 0 4px 12px rgba(76, 29, 149, 0.3);
+}
+
+.modal-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(76, 29, 149, 0.4);
+}
+
+.modal-button:active {
+  transform: translateY(0);
 }
 </style>

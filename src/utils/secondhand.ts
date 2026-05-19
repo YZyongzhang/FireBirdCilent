@@ -122,13 +122,15 @@ export type Order = {
   orderId: string | number
   items: CartItem[]
   totalAmount: number
-  status: 'pending' | 'paid' | 'shipped' | 'delivered' | 'completed' | 'cancelled'
+  status: 'pending' | 'paid' | 'shipped' | 'delivered' | 'completed' | 'cancelled' | 'return_pending' | 'return_approved' | 'return_rejected'
   date: string
   payTime?: string
   shipTime?: string
   deliverTime?: string
   shippingAddress?: string
   trackingNumber?: string
+  returnReason?: string
+  returnStatus?: 'pending' | 'approved' | 'rejected'
 }
 
 export interface ItemsResponse {
@@ -379,6 +381,20 @@ export async function getSellerById(id: number): Promise<{ status: string; messa
   return data
 }
 
+export async function getPendingSellers(): Promise<{ status: string; message?: string; data?: User[] }> {
+  const { data } = await axios.get(`${API_BASE}/api/users/sellers/pending`, {
+    headers: getHeaders(),
+  })
+  return data
+}
+
+export async function reviewSeller(sellerId: number, action: 'approve' | 'reject'): Promise<{ status: string; message?: string }> {
+  const { data } = await axios.post(`${API_BASE}/api/users/sellers/${sellerId}/review`, { action }, {
+    headers: getHeaders(),
+  })
+  return data
+}
+
 export async function registerSeller(payload: {
   username: string
   password: string
@@ -457,6 +473,26 @@ export async function getItemReviews(itemId: string | number): Promise<ReviewsRe
     headers: getHeaders(),
   })
   return data
+}
+
+export async function getReturnRequests(sellerId?: string | number): Promise<OrdersResponse> {
+  const url = sellerId ? `${BASE}/orders/returns/seller/${sellerId}` : `${BASE}/orders/returns`
+  const { data } = await axios.get(url, {
+    headers: getHeaders(),
+  })
+  return { orders: data.orders || data }
+}
+
+export async function approveReturnOrder(orderId: string | number): Promise<void> {
+  await axios.post(`${BASE}/orders/${orderId}/return/approve`, {}, {
+    headers: getHeaders(),
+  })
+}
+
+export async function rejectReturnOrder(orderId: string | number, reason: string): Promise<void> {
+  await axios.post(`${BASE}/orders/${orderId}/return/reject`, { reason }, {
+    headers: getHeaders(),
+  })
 }
 
 export async function submitReview(

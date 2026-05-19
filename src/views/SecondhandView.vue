@@ -653,6 +653,10 @@ function openSalesInfo() {
   fetchSalesOrders()
 }
 
+function goToMyShop() {
+  router.push('/seller/detail')
+}
+
 async function fetchSalesOrders() {
   if (!currentUser.value?.id) return
   salesOrdersLoading.value = true
@@ -704,7 +708,7 @@ onMounted(() => {
         <h1 class="page-title">🛒 二手交易</h1>
         <div class="top-actions">
           <button v-if="isAuthenticated && isSeller" class="btn-outline" @click="openMyListings">我的发布</button>
-          <button v-if="isAuthenticated && isSeller" class="btn-outline" @click="openSalesInfo">售卖信息</button>
+          <button v-if="isAuthenticated && isSeller" class="btn-outline" @click="goToMyShop">我的店铺</button>
           <button v-if="!isSeller && !isAdmin" class="btn-outline" @click="openOrders">我的订单</button>
           <button v-if="!isSeller && !isAdmin" class="btn-outline" @click="openCart">购物车</button>
           <button v-if="!isSeller && !isAdmin" class="btn-outline" @click="openSellerMessages">我的消息</button>

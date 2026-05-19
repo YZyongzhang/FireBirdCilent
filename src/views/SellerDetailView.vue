@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { getSellerById, getItems, getConversation, sendMessage, getOrdersBySeller, shipOrder, type Item, type Message, type Order } from '@/utils/secondhand'
+import { getSellerById, getItems, getConversation, sendMessage, getOrdersBySeller, shipOrder, getReturnRequests, approveReturnOrder, rejectReturnOrder, type Item, type Message, type Order } from '@/utils/secondhand'
 import { getUser } from '@/utils/auth'
 import type { User } from '@/utils/user'
 
@@ -25,17 +25,56 @@ const newMessage = ref('')
 
 // 弹窗相关
 const showOrdersModal = ref(false)
+const showReturnsModal = ref(false)
+const returnRequests = ref<Order[]>([])
+const returnsLoading = ref(false)
 
 onMounted(() => {
-  if (user?.role !== 'admin') {
+  console.log('=== SellerDetailView Debug ===')
+  console.log('User from localStorage:', user)
+  console.log('User ID:', user?.id)
+  console.log('User Role:', user?.role)
+  console.log('Route:', route.path)
+  console.log('Route params:', route.params)
+  
+  if (!user) {
+    console.log('DEBUG: User not logged in, redirecting to login')
+    router.push('/login')
+    return
+  }
+  
+  const userRole = user.role.toLowerCase()
+  console.log('DEBUG: User role (lowercase):', userRole)
+  
+  if (userRole !== 'admin' && userRole !== 'seller') {
+    console.log('DEBUG: User role is not admin or seller, redirecting to secondhand')
     router.push('/secondhand')
     return
   }
-  const sellerId = route.params.sellerId
+  
+  let sellerId: number | undefined
+  if (userRole === 'admin') {
+    const paramSellerId = route.params.sellerId
+    console.log('DEBUG: Admin mode, paramSellerId:', paramSellerId)
+    if (paramSellerId) {
+      sellerId = Number(paramSellerId)
+    } else {
+      console.log('DEBUG: No sellerId param, redirecting to admin/sellers')
+      router.push('/admin/sellers')
+      return
+    }
+  } else {
+    sellerId = Number(user.id)
+    console.log('DEBUG: Seller mode, sellerId from user.id:', sellerId)
+  }
+  
+  console.log('DEBUG: Final sellerId:', sellerId)
+  
   if (sellerId) {
-    fetchSeller(Number(sellerId))
-    fetchSellerItems(Number(sellerId))
-    fetchSellerOrders(Number(sellerId))
+    fetchSeller(sellerId)
+    fetchSellerItems(sellerId)
+    fetchSellerOrders(sellerId)
+    fetchReturnRequests(sellerId)
   }
 })
 
@@ -80,8 +119,32 @@ async function fetchSellerOrders(sellerId: number) {
   }
 }
 
+async function fetchReturnRequests(sellerId: number) {
+  returnsLoading.value = true
+  try {
+    console.log('DEBUG: Fetching return requests for sellerId:', sellerId)
+    const res = await getReturnRequests(sellerId)
+    console.log('DEBUG: Return requests API response:', res)
+    returnRequests.value = res.orders || []
+    console.log('DEBUG: Return requests list:', returnRequests.value)
+    console.log('DEBUG: Return requests details:', JSON.stringify(returnRequests.value, null, 2))
+    console.log('DEBUG: Pending returns count:', returnRequests.value.filter(o => o.returnStatus === 'pending').length)
+  } catch (e) {
+    console.error('DEBUG: Error fetching return requests:', e)
+    returnRequests.value = []
+  } finally {
+    returnsLoading.value = false
+  }
+}
+
 function goBack() {
-  router.push('/admin/sellers')
+  if (!user) return
+  const role = user.role.toLowerCase()
+  if (role === 'admin') {
+    router.push('/admin/sellers')
+  } else {
+    router.push('/secondhand')
+  }
 }
 
 function goToSecondhand() {
@@ -98,6 +161,43 @@ function openOrdersModal() {
 
 function closeOrdersModal() {
   showOrdersModal.value = false
+}
+
+function openReturnsModal() {
+  showReturnsModal.value = true
+}
+
+function closeReturnsModal() {
+  showReturnsModal.value = false
+}
+
+async function handleApproveReturn(order: Order) {
+  if (!confirm('确定要通过该退货申请吗？')) return
+  
+  try {
+    await approveReturnOrder(order.orderId)
+    order.status = 'return_approved'
+    order.returnStatus = 'approved'
+    alert('退货申请已通过')
+  } catch (e) {
+    console.error('审核退货失败:', e)
+    alert('审核失败')
+  }
+}
+
+async function handleRejectReturn(order: Order) {
+  const reason = prompt('请输入拒绝原因：')
+  if (!reason) return
+  
+  try {
+    await rejectReturnOrder(order.orderId, reason)
+    order.status = 'return_rejected'
+    order.returnStatus = 'rejected'
+    alert('退货申请已拒绝')
+  } catch (e) {
+    console.error('拒绝退货失败:', e)
+    alert('操作失败')
+  }
 }
 
 async function handleShipOrder(order: Order) {
@@ -176,7 +276,10 @@ function getStatusText(status: string): string {
     shipped: '已发货',
     delivered: '待确认',
     completed: '已完成',
-    cancelled: '已取消'
+    cancelled: '已取消',
+    return_pending: '退货审核中',
+    return_approved: '退货已通过',
+    return_rejected: '退货已拒绝'
   }
   return statusMap[status] || status
 }
@@ -184,14 +287,16 @@ function getStatusText(status: string): string {
 function getStatusClass(status: string): string {
   return `status-${status}`
 }
+
+const isAdminRole = computed(() => user?.role.toLowerCase() === 'admin')
 </script>
 
 <template>
   <div class="seller-detail-page">
     <header class="page-header">
       <div class="header-content">
-        <button class="btn-back" @click="goBack">← 返回商家列表</button>
-        <h1 class="page-title">商家详情</h1>
+        <button class="btn-back" @click="goBack">← {{ isAdminRole ? '返回商家列表' : '返回' }}</button>
+        <h1 class="page-title">{{ isAdminRole ? '商家详情' : '我的店铺' }}</h1>
         <button class="btn-home" @click="goToSecondhand">二手市场</button>
       </div>
     </header>
@@ -268,6 +373,28 @@ function getStatusClass(status: string): string {
           </div>
         </div>
 
+        <!-- 退货审核模块 -->
+        <div class="returns-section" @click="openReturnsModal">
+          <div class="section-header">
+            <h3>🔄 退货审核</h3>
+            <span class="returns-count">{{ returnRequests.length }} 笔申请</span>
+          </div>
+          <div class="returns-summary">
+            <div class="summary-item">
+              <span class="summary-label">待审核</span>
+              <span class="summary-value pending">{{ returnRequests.filter(o => o.returnStatus === 'pending').length }}</span>
+            </div>
+            <div class="summary-item">
+              <span class="summary-label">已通过</span>
+              <span class="summary-value approved">{{ returnRequests.filter(o => o.returnStatus === 'approved').length }}</span>
+            </div>
+            <div class="summary-item">
+              <span class="summary-label">已拒绝</span>
+              <span class="summary-value rejected">{{ returnRequests.filter(o => o.returnStatus === 'rejected').length }}</span>
+            </div>
+          </div>
+        </div>
+
         <div class="products-section">
           <div class="section-header">
             <h3>在售商品</h3>
@@ -333,6 +460,48 @@ function getStatusClass(status: string): string {
               </div>
               <div class="order-actions" v-if="order.status === 'paid'">
                 <button class="btn-ship" @click.stop="handleShipOrder(order)">发货</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 退货审核弹窗 -->
+      <div v-if="showReturnsModal" class="modal-overlay" @click.self="closeReturnsModal">
+        <div class="modal modal-large">
+          <button class="close" @click="closeReturnsModal">关闭</button>
+          <h2>退货申请审核</h2>
+          <div v-if="returnsLoading" class="loading">加载中...</div>
+          <div v-else-if="returnRequests.length === 0" class="empty">暂无退货申请</div>
+          <div v-else class="returns-list">
+            <div v-for="order in returnRequests" :key="order.orderId" class="return-item">
+              <div class="return-header">
+                <span class="order-id">订单号：{{ order.orderId }}</span>
+                <span class="return-status" :class="`status-${order.returnStatus}`">
+                  {{ order.returnStatus === 'pending' ? '待审核' : order.returnStatus === 'approved' ? '已通过' : '已拒绝' }}
+                </span>
+              </div>
+              <div class="return-info">
+                <div class="info-row">
+                  <span class="info-label">下单时间</span>
+                  <span class="info-value">{{ order.date }}</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-label">订单金额</span>
+                  <span class="info-value">¥{{ order.totalAmount }}</span>
+                </div>
+                <div class="info-row reason">
+                  <span class="info-label">退货原因</span>
+                  <span class="info-value">{{ order.returnReason || '未填写' }}</span>
+                </div>
+              </div>
+              <div class="return-actions" v-if="order.returnStatus === 'pending'">
+                <button class="btn-approve" @click.stop="handleApproveReturn(order)">通过</button>
+                <button class="btn-reject" @click.stop="handleRejectReturn(order)">拒绝</button>
+              </div>
+              <div v-else class="return-result">
+                <span v-if="order.returnStatus === 'approved'" class="result-text approved">✓ 退货已通过</span>
+                <span v-else class="result-text rejected">✗ 退货已拒绝</span>
               </div>
             </div>
           </div>
@@ -683,6 +852,57 @@ function getStatusClass(status: string): string {
   color: #16a34a;
 }
 
+/* 退货审核模块样式 */
+.returns-section {
+  background: rgba(255, 255, 255, 0.98);
+  border-radius: 20px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 8px 32px rgba(76, 29, 149, 0.15);
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.returns-section:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 40px rgba(76, 29, 149, 0.2);
+}
+
+.returns-section .section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #f1f5f9;
+}
+
+.returns-section h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.returns-count {
+  color: #64748b;
+  font-size: 14px;
+}
+
+.returns-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.summary-value.approved {
+  color: #16a34a;
+}
+
+.summary-value.rejected {
+  color: #dc2626;
+}
+
 /* 订单弹窗样式 */
 .modal-overlay {
   position: fixed;
@@ -860,6 +1080,132 @@ function getStatusClass(status: string): string {
 .btn-ship:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+
+/* 退货列表样式 */
+.returns-list {
+  padding: 16px;
+}
+
+.return-item {
+  background: #f8fafc;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.return-item:last-child {
+  margin-bottom: 0;
+}
+
+.return-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.return-status {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.return-status.status-pending {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.return-status.status-approved {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.return-status.status-rejected {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.return-info {
+  margin-bottom: 12px;
+}
+
+.info-row.reason {
+  background: #fef3c7;
+  padding: 10px 12px;
+  border-radius: 8px;
+}
+
+.info-row.reason .info-label {
+  color: #d97706;
+  font-weight: 600;
+}
+
+.info-row.reason .info-value {
+  color: #b45309;
+}
+
+.return-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.btn-approve {
+  padding: 10px 24px;
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.btn-approve:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
+}
+
+.btn-reject {
+  padding: 10px 24px;
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.btn-reject:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);
+}
+
+.return-result {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.result-text {
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.result-text.approved {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.result-text.rejected {
+  background: #fee2e2;
+  color: #dc2626;
 }
 
 /* 聊天窗口样式 */
