@@ -435,19 +435,19 @@ export async function getOrdersBySeller(sellerId: string | number): Promise<Orde
 }
 
 export async function shipOrder(orderId: string | number, trackingNumber?: string): Promise<void> {
-  await axios.put(`${BASE}/orders/${orderId}/ship`, { trackingNumber }, {
+  await axios.post(`${BASE}/orders/${orderId}/ship`, { trackingNumber }, {
     headers: getHeaders(),
   })
 }
 
 export async function confirmOrder(orderId: string | number): Promise<void> {
-  await axios.put(`${BASE}/orders/${orderId}/confirm`, {}, {
+  await axios.post(`${BASE}/orders/${orderId}/confirm`, {}, {
     headers: getHeaders(),
   })
 }
 
 export async function applyReturnOrder(orderId: string | number, reason: string): Promise<void> {
-  await axios.put(`${BASE}/orders/${orderId}/return`, { reason }, {
+  await axios.post(`${BASE}/orders/${orderId}/refund`, { reason }, {
     headers: getHeaders(),
   })
 }
