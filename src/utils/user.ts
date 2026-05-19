@@ -17,6 +17,8 @@ export interface User {
   businessType?: string
   description?: string
   balance?: number
+  creditScore?: number
+  banned?: boolean
 }
 
 export interface UserResponse {
@@ -104,6 +106,54 @@ export async function recharge(amount: number): Promise<{ success: boolean; mess
   }
 }
 
+export async function banUser(id: string | number): Promise<UserResponse> {
+  const { data } = await axios.post(`${BASE}/${id}/ban`, {}, {
+    headers: getHeaders(),
+  })
+  return data
+}
+
+export async function unbanUser(id: string | number): Promise<UserResponse> {
+  const { data } = await axios.post(`${BASE}/${id}/unban`, {}, {
+    headers: getHeaders(),
+  })
+  return data
+}
+
+export async function getSellerCredit(id: string | number): Promise<{
+  status: string
+  message?: string
+  data?: { creditScore: number }
+}> {
+  const { data } = await axios.get(`${BASE}/sellers/${id}/credit`, {
+    headers: getHeaders(),
+  })
+  return data
+}
+
+export async function getSellerStatistics(id: string | number): Promise<{
+  status: string
+  message?: string
+  data?: {
+    sellerId: number
+    username: string
+    statistics: Array<{
+      itemId: number
+      itemTitle: string
+      itemPrice: number
+      orderCount: number
+      totalSold: number
+      totalRevenue: number
+      refundCount: number
+    }>
+  }
+}> {
+  const { data } = await axios.get(`${BASE}/sellers/${id}/statistics`, {
+    headers: getHeaders(),
+  })
+  return data
+}
+
 export default {
   getUsers,
   getUserById,
@@ -112,4 +162,8 @@ export default {
   getCurrentUser,
   registerUser,
   recharge,
+  banUser,
+  unbanUser,
+  getSellerCredit,
+  getSellerStatistics,
 }

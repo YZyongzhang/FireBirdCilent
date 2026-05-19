@@ -162,6 +162,7 @@ const currentSellers = computed(() => {
             <div class="seller-avatar">
               {{ seller.username?.charAt(0).toUpperCase() }}
             </div>
+            <!-- 大写字母作为默认头像 -->
             <div class="seller-info">
               <div class="seller-name-row">
                 <h3 class="seller-name">{{ seller.username }}</h3>

@@ -4,6 +4,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { getSellerById, getItems, getConversation, sendMessage, getOrdersBySeller, shipOrder, getReturnRequests, approveReturnOrder, rejectReturnOrder, type Item, type Message, type Order } from '@/utils/secondhand'
 import { getUser } from '@/utils/auth'
 import type { User } from '@/utils/user'
+import { getSellerCredit, getSellerStatistics } from '@/utils/user'
 
 const router = useRouter()
 const route = useRoute()
@@ -16,6 +17,11 @@ const loading = ref(false)
 const sellerLoading = ref(false)
 const ordersLoading = ref(false)
 const error = ref('')
+const creditScore = ref<number>(100)
+const creditLoading = ref(false)
+const sellerStats = ref<any[]>([])
+const statsLoading = ref(false)
+const showStatsModal = ref(false)
 
 // 聊天相关
 const showChat = ref(false)
@@ -75,6 +81,8 @@ onMounted(() => {
     fetchSellerItems(sellerId)
     fetchSellerOrders(sellerId)
     fetchReturnRequests(sellerId)
+    fetchCreditScore(sellerId)
+    fetchStatistics(sellerId)
   }
 })
 
@@ -93,6 +101,42 @@ async function fetchSeller(sellerId: number) {
   } finally {
     sellerLoading.value = false
   }
+}
+
+async function fetchCreditScore(sellerId: number) {
+  creditLoading.value = true
+  try {
+    const res = await getSellerCredit(sellerId)
+    if (res.status === 'ok' && res.data) {
+      creditScore.value = res.data.creditScore
+    }
+  } catch (e) {
+    console.error('获取信用分失败:', e)
+  } finally {
+    creditLoading.value = false
+  }
+}
+
+async function fetchStatistics(sellerId: number) {
+  statsLoading.value = true
+  try {
+    const res = await getSellerStatistics(sellerId)
+    if (res.status === 'ok' && res.data) {
+      sellerStats.value = res.data.statistics || []
+    }
+  } catch (e) {
+    console.error('获取销售统计失败:', e)
+  } finally {
+    statsLoading.value = false
+  }
+}
+
+function openStatsModal() {
+  showStatsModal.value = true
+}
+
+function closeStatsModal() {
+  showStatsModal.value = false
 }
 
 async function fetchSellerItems(sellerId: number) {
@@ -322,9 +366,10 @@ const isAdminRole = computed(() => user?.role.toLowerCase() === 'admin')
               <h2 class="profile-name">{{ seller.username }}</h2>
               <span class="profile-badge">商家</span>
             </div>
-            <button class="btn-contact" @click="contactSeller">
+            <!-- <button class="btn-contact" @click="contactSeller">
               💬 联系商家
-            </button>
+            </button> -->
+            <!-- 暂时把这个地方的联系商家去掉，应该不会对项目有什么太大的影响 -->
           </div>
 
           <div class="profile-details">
@@ -342,6 +387,14 @@ const isAdminRole = computed(() => user?.role.toLowerCase() === 'admin')
               <span class="detail-icon">🏠</span>
               <span class="detail-label">地址</span>
               <span class="detail-value">{{ seller.address }}</span>
+            </div>
+            <div class="detail-item credit-item">
+              <span class="detail-icon">⭐</span>
+              <span class="detail-label">信用分</span>
+              <span v-if="creditLoading" class="detail-value">加载中...</span>
+              <span v-else :class="['detail-value', 'credit-value', creditScore < 60 ? 'low' : '']">
+                {{ creditScore }}分
+              </span>
             </div>
           </div>
 
@@ -391,6 +444,32 @@ const isAdminRole = computed(() => user?.role.toLowerCase() === 'admin')
             <div class="summary-item">
               <span class="summary-label">已拒绝</span>
               <span class="summary-value rejected">{{ returnRequests.filter(o => o.returnStatus === 'rejected').length }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 销售统计模块（多表联查功能） -->
+        <div class="stats-section" @click="openStatsModal">
+          <div class="section-header">
+            <h3>📊 销售统计</h3>
+            <span class="stats-count">{{ sellerStats.length }} 项数据</span>
+          </div>
+          <div class="stats-summary">
+            <div class="summary-item">
+              <span class="summary-label">总订单数</span>
+              <span class="summary-value">{{ sellerStats.reduce((sum, s) => sum + (s.orderCount || 0), 0) }}</span>
+            </div>
+            <div class="summary-item">
+              <span class="summary-label">总销量</span>
+              <span class="summary-value">{{ sellerStats.reduce((sum, s) => sum + (s.totalSold || 0), 0) }}</span>
+            </div>
+            <div class="summary-item">
+              <span class="summary-label">总营收</span>
+              <span class="summary-value">¥{{ sellerStats.reduce((sum, s) => sum + (s.totalRevenue || 0), 0).toFixed(2) }}</span>
+            </div>
+            <div class="summary-item">
+              <span class="summary-label">退货数</span>
+              <span class="summary-value pending">{{ sellerStats.reduce((sum, s) => sum + (s.refundCount || 0), 0) }}</span>
             </div>
           </div>
         </div>
@@ -504,6 +583,40 @@ const isAdminRole = computed(() => user?.role.toLowerCase() === 'admin')
                 <span v-else class="result-text rejected">✗ 退货已拒绝</span>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 销售统计弹窗（多表联查功能） -->
+      <div v-if="showStatsModal" class="modal-overlay" @click.self="closeStatsModal">
+        <div class="modal modal-xlarge">
+          <button class="close" @click="closeStatsModal">关闭</button>
+          <h2>销售统计详情</h2>
+          <div v-if="statsLoading" class="loading">加载中...</div>
+          <div v-else-if="sellerStats.length === 0" class="empty">暂无统计数据</div>
+          <div v-else class="stats-table-wrapper">
+            <table class="stats-table">
+              <thead>
+                <tr>
+                  <th>商品</th>
+                  <th>单价</th>
+                  <th>订单数</th>
+                  <th>总销量</th>
+                  <th>总营收</th>
+                  <th>退货数</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="stat in sellerStats" :key="stat.itemId" class="stats-row">
+                  <td class="product-name">{{ stat.itemTitle }}</td>
+                  <td>¥{{ stat.itemPrice }}</td>
+                  <td>{{ stat.orderCount }}</td>
+                  <td>{{ stat.totalSold }}</td>
+                  <td class="revenue">¥{{ stat.totalRevenue?.toFixed(2) || '0.00' }}</td>
+                  <td class="refund">{{ stat.refundCount }}</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
@@ -1463,5 +1576,131 @@ const isAdminRole = computed(() => user?.role.toLowerCase() === 'admin')
 .btn-send:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
+}
+
+/* 信用分样式 */
+.credit-item {
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.1), rgba(245, 158, 11, 0.1));
+  border-radius: 8px;
+}
+
+.credit-value {
+  font-weight: 700;
+  color: #16a34a;
+  font-size: 16px;
+}
+
+.credit-value.low {
+  color: #dc2626;
+}
+
+/* 销售统计模块样式 */
+.stats-section {
+  background: rgba(255, 255, 255, 0.98);
+  border-radius: 20px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 8px 32px rgba(76, 29, 149, 0.15);
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.stats-section:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 40px rgba(76, 29, 149, 0.2);
+}
+
+.stats-section .section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #f1f5f9;
+}
+
+.stats-section h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.stats-count {
+  color: #64748b;
+  font-size: 14px;
+}
+
+.stats-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+/* 统计弹窗样式 */
+.modal-xlarge {
+  max-width: 1000px;
+}
+
+.stats-table-wrapper {
+  padding: 16px;
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.stats-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.stats-table thead {
+  background: #f8fafc;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.stats-table th {
+  padding: 14px 16px;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.stats-table tbody tr {
+  border-bottom: 1px solid #f1f5f9;
+  transition: background 0.2s;
+}
+
+.stats-table tbody tr:hover {
+  background: #f8fafc;
+}
+
+.stats-table td {
+  padding: 14px 16px;
+  font-size: 14px;
+  color: #374151;
+}
+
+.product-name {
+  font-weight: 600;
+  color: #1e293b;
+  max-width: 200px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.revenue {
+  font-weight: 700;
+  color: #16a34a;
+}
+
+.refund {
+  color: #dc2626;
+  font-weight: 600;
 }
 </style>

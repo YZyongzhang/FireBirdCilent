@@ -81,48 +81,73 @@ const currentDate = computed(() => {
   return `${now.getMonth() + 1}月${now.getDate()}日 ${weekdays[now.getDay()]}`
 })
 
-const cards = [
-  {
-    icon: '💭',
-    title: '个人思考记录',
-    description: '记录和整理你的个人想法、复盘和灵感。',
-    actionText: '进入页面',
-    onClick: () => router.push('/thoughts'),
-    color: '#8b5cf6',
-  },
-  {
-    icon: '🛒',
-    title: '二手交易',
-    description: '发布与浏览二手商品，发现更多好物。',
-    actionText: '进入页面',
-    onClick: () => router.push('/secondhand'),
-    color: '#22c55e',
-  },
-  {
-    icon: '📅',
-    title: '每日计划',
-    description: '查看今天的安排、任务优先级和关键提醒。',
-    actionText: '进入页面',
-    onClick: () => router.push('/daily-plan'),
-    color: '#3b82f6',
-  },
-  {
-    icon: '📚',
-    title: '资料库',
-    description: '收集常用资料、文档和外部链接。',
-    actionText: '敬请期待',
-    color: '#f59e0b',
-    disabled: true,
-  },
-  {
-    icon: '✨',
-    title: '灵感卡片',
-    description: '捕捉灵感瞬间，记录创意火花。',
-    actionText: '敬请期待',
-    color: '#ec4899',
-    disabled: true,
-  },
-]
+const cards = computed(() => {
+  const baseCards = [
+    {
+      icon: '💭',
+      title: '个人思考记录',
+      description: '记录和整理你的个人想法、复盘和灵感。',
+      actionText: '进入页面',
+      onClick: () => router.push('/thoughts'),
+      color: '#8b5cf6',
+    },
+    {
+      icon: '🛒',
+      title: '二手交易',
+      description: '发布与浏览二手商品，发现更多好物。',
+      actionText: '进入页面',
+      onClick: () => router.push('/secondhand'),
+      color: '#22c55e',
+    },
+    {
+      icon: '📅',
+      title: '每日计划',
+      description: '查看今天的安排、任务优先级和关键提醒。',
+      actionText: '进入页面',
+      onClick: () => router.push('/daily-plan'),
+      color: '#3b82f6',
+    },
+    {
+      icon: '📚',
+      title: '资料库',
+      description: '收集常用资料、文档和外部链接。',
+      actionText: '敬请期待',
+      color: '#f59e0b',
+      disabled: true,
+    },
+    {
+      icon: '✨',
+      title: '灵感卡片',
+      description: '捕捉灵感瞬间，记录创意火花。',
+      actionText: '敬请期待',
+      color: '#ec4899',
+      disabled: true,
+    },
+  ]
+
+  if (user.value?.role === 'admin') {
+    baseCards.unshift(
+      {
+        icon: '👥',
+        title: '用户管理',
+        description: '管理平台用户，支持封禁/解封操作。',
+        actionText: '进入页面',
+        onClick: () => router.push('/admin/users'),
+        color: '#ef4444',
+      },
+      {
+        icon: '🏪',
+        title: '商家管理',
+        description: '审核商家申请，管理平台商家。',
+        actionText: '进入页面',
+        onClick: () => router.push('/admin/sellers'),
+        color: '#f59e0b',
+      }
+    )
+  }
+
+  return baseCards
+})
 </script>
 
 <template>

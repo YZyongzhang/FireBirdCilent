@@ -225,7 +225,8 @@ export async function createItem(payload: {
   formData.append('price', String(payload.price))
   formData.append('category', payload.category)
   if (payload.images) {
-    payload.images.forEach(img => formData.append('images', img))
+    payload.images.forEach(img => formData.append('images', img)) 
+    // 添加多个images的同名字段，而不是变成一个数组。后端直接获取所有的同名字段进行处理
   }
   const { data } = await axios.post(`${BASE}/items`, formData, {
     headers: {

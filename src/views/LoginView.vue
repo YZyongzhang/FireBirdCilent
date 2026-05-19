@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onUnmounted } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { API_BASE } from '../config'
@@ -24,12 +24,48 @@ const password = ref('')
 const showPassword = ref(false)
 const showRegPassword = ref(false)
 const showRegConfirm = ref(false)
+
+const captchaToken = ref('')
+const captchaText = ref('')
+const captchaInput = ref('')
+const charRotation = ref<number[]>([])
+const charScale = ref<number[]>([])
+const charColors = ref<string[]>([])
+
+function generateCharStyles(length: number) {
+  const colors = ['#7c3aed', '#a855f7', '#c084fc', '#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#0ea5e9']
+  charRotation.value = Array.from({ length }, () => Math.floor(Math.random() * 60) - 30)
+  charScale.value = Array.from({ length }, () => 0.8 + Math.random() * 0.4)
+  charColors.value = Array.from({ length }, () => colors[Math.floor(Math.random() * colors.length)])
+}
+
+const loadCaptcha = async () => {
+  try {
+    const res = await axios.get(`${API_BASE}/captcha`)
+    if (res.data.status === 'ok' && res.data.data) {
+      captchaToken.value = res.data.data.token
+      captchaText.value = res.data.data.captcha
+      captchaInput.value = ''
+      generateCharStyles(res.data.data.captcha.length)
+    }
+  } catch (err) {
+    console.error('Failed to load captcha:', err)
+  }
+}
+
 const handleAccountLogin = async () => {
+  if (!captchaToken.value || !captchaInput.value) {
+    errorMessage.value = '请输入人机验证码'
+    return
+  }
+
   loading.value = true
   try {
     const res = await axios.post(`${API_BASE}/login`, {
       username: username.value,
       password: password.value,
+      captchaToken: captchaToken.value,
+      captchaInput: captchaInput.value,
     })
     if (res.data.status === 'ok') {
       const dataMap = res.data?.data
@@ -266,11 +302,18 @@ watch(mode, (n) => {
     qrSessionId.value = ''
     qrStatus.value = 'waiting'
   }
+  if (n === 'account') {
+    loadCaptcha()
+  }
 })
 
 onUnmounted(() => {
   stopPolling()
   if (qrCodeUrl.value) URL.revokeObjectURL(qrCodeUrl.value)
+})
+
+onMounted(() => {
+  loadCaptcha()
 })
 
 </script>
@@ -364,6 +407,34 @@ onUnmounted(() => {
           >
             {{ showPassword ? '🙈' : '👁️' }}
           </button>
+        </div>
+
+        <div class="captcha-row">
+          <div class="input-wrapper captcha-input-wrapper">
+            <span class="input-icon">🔐</span>
+            <input
+              v-model="captchaInput"
+              type="text"
+              placeholder="请输入验证码"
+              :disabled="loading"
+              @keyup.enter="handleAccountLogin"
+            />
+          </div>
+          <div class="captcha-display" v-if="captchaText">
+            <span
+              v-for="(char, index) in captchaText.split('')"
+              :key="index"
+              class="captcha-char"
+              :style="{
+                transform: `rotate(${charRotation[index]}deg) scale(${charScale[index]})`,
+                color: charColors[index],
+                animationDelay: `${index * 0.1}s`
+              }"
+            >{{ char }}</span>
+            <button type="button" class="refresh-captcha" @click="loadCaptcha" :disabled="loading">
+              🔄
+            </button>
+          </div>
         </div>
 
         <p v-if="errorMessage" class="error-message">
@@ -1003,6 +1074,87 @@ onUnmounted(() => {
 }
 
 .send-code:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 验证码行 */
+.captcha-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 0;
+}
+
+.captcha-input-wrapper {
+  flex: 1;
+}
+
+.captcha-display {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 16px;
+  height: 52px;
+  background: linear-gradient(135deg, #1e1b4b, #312e81);
+  border: 2px solid #7c3aed;
+  border-radius: 14px;
+  position: relative;
+  overflow: hidden;
+}
+
+.captcha-display::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(255, 255, 255, 0.03) 2px,
+    rgba(255, 255, 255, 0.03) 4px
+  );
+  pointer-events: none;
+}
+
+.captcha-char {
+  font-family: 'Georgia', serif;
+  font-size: 28px;
+  font-weight: 700;
+  font-style: italic;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+  display: inline-block;
+  animation: charAppear 0.3s ease-out forwards;
+  opacity: 0;
+}
+
+@keyframes charAppear {
+  0% {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.5);
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.refresh-captcha {
+  padding: 4px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;
+  transition: transform 0.2s;
+}
+
+.refresh-captcha:hover:not(:disabled) {
+  transform: rotate(180deg);
+}
+
+.refresh-captcha:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }

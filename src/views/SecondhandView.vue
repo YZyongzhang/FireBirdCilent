@@ -38,7 +38,7 @@ const user = getUser()
 
 const search = ref('')
 const category = ref('全部')
-const categories = ref<string[]>(['全部', '灵感', '思考', '模版', '资源'])
+const categories = ref<string[]>(['全部', '灵感', '思考', '模版', '资源']) // 同时可以在后端进行双重调控。实际上前端的几乎没有什么作用
 
 const items = ref<Item[]>([])
 const total = ref(0)

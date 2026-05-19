@@ -8,6 +8,7 @@ import ItemDetailView from '@/views/ItemDetailView.vue'
 import OrderDetailView from '@/views/OrderDetailView.vue'
 import AdminSellersView from '@/views/AdminSellersView.vue'
 import SellerDetailView from '@/views/SellerDetailView.vue'
+import AdminUsersView from '@/views/AdminUsersView.vue'
 import { getUser, clearUser } from '@/utils/auth'
 
 const router = createRouter({
@@ -75,6 +76,12 @@ const router = createRouter({
       path: '/seller/detail',
       name: 'my-shop',
       component: SellerDetailView,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/admin/users',
+      name: 'admin-users',
+      component: AdminUsersView,
       meta: { requiresAuth: true },
     },
   ],
