@@ -378,7 +378,7 @@ export async function getSellerById(id: number): Promise<{ status: string; messa
   const { data } = await axios.get(`${API_BASE}/api/users/sellers/${id}`, {
     headers: getHeaders(),
   })
-  return data
+  return data 
 }
 
 export async function getPendingSellers(): Promise<{ status: string; message?: string; data?: User[] }> {
