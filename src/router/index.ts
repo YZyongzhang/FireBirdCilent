@@ -4,6 +4,8 @@ import LoginView from '@/views/LoginView.vue'
 import ThoughtsView from '@/views/ThoughtsView.vue'
 import DailyPlanView from '@/views/DailyPlanView.vue'
 import SecondhandView from '@/views/SecondhandView.vue'
+import ItemDetailView from '@/views/ItemDetailView.vue'
+import OrderDetailView from '@/views/OrderDetailView.vue'
 import AdminSellersView from '@/views/AdminSellersView.vue'
 import SellerDetailView from '@/views/SellerDetailView.vue'
 import { getUser, clearUser } from '@/utils/auth'
@@ -43,6 +45,18 @@ const router = createRouter({
       path: '/secondhand',
       name: 'secondhand',
       component: SecondhandView,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/secondhand/item/:itemId',
+      name: 'item-detail',
+      component: ItemDetailView,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/secondhand/order/:orderId',
+      name: 'order-detail',
+      component: OrderDetailView,
       meta: { requiresAuth: true },
     },
     {

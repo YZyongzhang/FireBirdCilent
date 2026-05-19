@@ -3,7 +3,6 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   getItems,
-  getCategories,
   getCart,
   addToCart,
   updateCartItem,
@@ -13,9 +12,12 @@ import {
   getConversation,
   sendMessage,
   getOrders,
+  getOrdersBySeller,
   createOrder,
   createItem,
   payOrder,
+  shipOrder,
+  confirmOrder,
   getItemReviews,
   submitReview,
   getMyItems,
@@ -35,7 +37,7 @@ const user = getUser()
 
 const search = ref('')
 const category = ref('全部')
-const categories = ref<string[]>(['全部','灵感','模版'])
+const categories = ref<string[]>(['全部', '灵感', '思考', '模版', '资源'])
 
 const items = ref<Item[]>([])
 const total = ref(0)
@@ -84,6 +86,11 @@ const showMyListings = ref(false)
 const myListings = ref<Item[]>([])
 const myListingsLoading = ref(false)
 
+// 售卖信息相关（卖家）
+const showSalesInfo = ref(false)
+const salesOrders = ref<Order[]>([])
+const salesOrdersLoading = ref(false)
+
 // 商家管理相关（管理员）
 const showSellerMessages = ref(false)
 const sellerMessagesLoading = ref(false)
@@ -128,14 +135,7 @@ console.log('currentUser:', currentUser.value)
 console.log('isSeller:', isSeller.value)
 console.log('isAuthenticated:', isAuthenticated.value)
 
-async function fetchCategories() {
-  try {
-    const res = await getCategories()
-    categories.value = ['全部', ...res.categories]
-  } catch (e) {
-    console.error('Failed to fetch categories:', e)
-  }
-}
+
 
 async function fetchItems() {
   loading.value = true
@@ -185,14 +185,7 @@ function goToPage(pageNum: number) {
 }
 
 async function openDetail(it: Item) {
-  activeItem.value = it
-  showDetail.value = true
-  try {
-    const res = await getItemReviews(it.id)
-    itemReviews.value = res.reviews
-  } catch (e) {
-    itemReviews.value = []
-  }
+  router.push(`/secondhand/item/${it.id}`)
 }
 
 function closeDetail() {
@@ -203,7 +196,7 @@ function closeDetail() {
 }
 
 async function handleAddItem() {
-  if (!addForm.value.title || !addForm.value.price || !addForm.value.category) {
+  if (!addForm.value.title || !addForm.value.price) {
     error.value = '请填写完整信息'
     return
   }
@@ -214,7 +207,7 @@ async function handleAddItem() {
       title: addForm.value.title,
       description: addForm.value.description,
       price: parseFloat(addForm.value.price),
-      category: addForm.value.category,
+      category: addForm.value.category || '灵感',
       images: addImages.value.length > 0 ? addImages.value : undefined,
     })
     if (result.success) {
@@ -301,9 +294,18 @@ async function openChat(item: Item) {
     alert('无法联系卖家，卖家信息不完整')
     return
   }
+  
+  let conversationItemId = String(item.id)
+  let conversationItemTitle = item.title
+  
+  if (isAdmin.value) {
+    conversationItemId = `admin_${item.seller.id}`
+    conversationItemTitle = '系统消息'
+  }
+  
   const conversation: Conversation = {
-    itemId: String(item.id),
-    itemTitle: item.title,
+    itemId: conversationItemId,
+    itemTitle: conversationItemTitle,
     otherUserId: item.seller.id,
     otherUsername: item.seller.name || item.sellerName || '未知卖家',
     lastMessage: '',
@@ -314,7 +316,7 @@ async function openChat(item: Item) {
   showChat.value = true
   chatLoading.value = true
   try {
-    const res = await getConversation(item.seller.id, String(item.id))
+    const res = await getConversation(item.seller.id, conversationItemId)
     chatMessages.value = res.messages
   } catch (e) {
     chatMessages.value = []
@@ -460,6 +462,13 @@ async function handleSendMessage() {
   }
 }
 
+function closeChat() {
+  showChat.value = false
+  if (isSeller) {
+    fetchSellerMessages()
+  }
+}
+
 async function fetchCart() {
   cartLoading.value = true
   try {
@@ -582,13 +591,91 @@ async function openOrders() {
   }
 }
 
+function getStatusText(status: string): string {
+  const statusMap: Record<string, string> = {
+    pending: '待付款',
+    paid: '待发货',
+    shipped: '已发货',
+    delivered: '待确认',
+    completed: '已完成',
+    cancelled: '已取消'
+  }
+  return statusMap[status] || status
+}
+
+function goToOrderDetail(order: Order) {
+  router.push('/secondhand/order/' + order.orderId)
+}
+
+async function handleShipOrder(order: Order) {
+  const trackingNumber = prompt('请输入物流单号：')
+  if (!trackingNumber) return
+  
+  try {
+    await shipOrder(order.orderId, trackingNumber)
+    order.status = 'shipped'
+    order.trackingNumber = trackingNumber
+  } catch (e) {
+    console.error('发货失败:', e)
+  }
+}
+
+async function handleShipOrderFromListing(order: Order, item: Item) {
+  const trackingNumber = prompt('请输入物流单号：')
+  if (!trackingNumber) return
+  
+  try {
+    await shipOrder(order.orderId, trackingNumber)
+    order.status = 'shipped'
+    order.trackingNumber = trackingNumber
+    // 从商品的订单列表中移除已发货的订单
+    if (item.orders) {
+      const index = item.orders.findIndex(o => o.orderId === order.orderId)
+      if (index > -1) {
+        item.orders.splice(index, 1)
+      }
+    }
+  } catch (e) {
+    console.error('发货失败:', e)
+  }
+}
+
+function openSalesInfo() {
+  showSalesInfo.value = true
+  fetchSalesOrders()
+}
+
+async function fetchSalesOrders() {
+  if (!currentUser.value?.id) return
+  salesOrdersLoading.value = true
+  try {
+    const res = await getOrdersBySeller(currentUser.value.id)
+    salesOrders.value = res.orders || []
+  } catch (e) {
+    salesOrders.value = []
+    console.error('获取售卖订单失败:', e)
+  } finally {
+    salesOrdersLoading.value = false
+  }
+}
+
+async function handleConfirmOrder(order: Order) {
+  if (!confirm('确认已收到商品？')) return
+  
+  try {
+    await confirmOrder(order.orderId)
+    order.status = 'completed'
+  } catch (e) {
+    console.error('确认收货失败:', e)
+  }
+}
+
 watch([search, category], () => {
   page.value = 1
   fetchItems()
 })
 
 onMounted(() => {
-  fetchCategories()
   fetchItems()
 })
 </script>
@@ -607,7 +694,8 @@ onMounted(() => {
       <div class="top-content">
         <h1 class="page-title">🛒 二手交易</h1>
         <div class="top-actions">
-          <button v-if="isAuthenticated" class="btn-outline" @click="openMyListings">我的发布</button>
+          <button v-if="isAuthenticated && isSeller" class="btn-outline" @click="openMyListings">我的发布</button>
+          <button v-if="isAuthenticated && isSeller" class="btn-outline" @click="openSalesInfo">售卖信息</button>
           <button v-if="!isSeller && !isAdmin" class="btn-outline" @click="openOrders">我的订单</button>
           <button v-if="!isSeller && !isAdmin" class="btn-outline" @click="openCart">购物车</button>
           <button v-if="!isSeller && !isAdmin" class="btn-outline" @click="openSellerMessages">我的消息</button>
@@ -705,78 +793,6 @@ onMounted(() => {
         <span class="total-count">共 {{ total }} 件商品</span>
       </div>
     </section>
-
-    <div v-if="showDetail && activeItem" class="modal-overlay" @click.self="closeDetail">
-      <div class="modal modal-large">
-        <button class="close" @click="closeDetail">关闭</button>
-        <div class="modal-content">
-          <div class="modal-thumb">
-            <img :src="activeItem.thumb || activeItem.images?.[0] || '/placeholder.png'" alt="" />
-          </div>
-          <div class="modal-info">
-            <h2>{{ activeItem.title }}</h2>
-            <p class="price-large">¥{{ activeItem.price }}</p>
-            <p class="desc">{{ activeItem.description }}</p>
-            <p class="meta">
-              卖家：{{ activeItem.seller?.name || activeItem.sellerName }} •
-              分类：{{ activeItem.category }} •
-              发布：{{ activeItem.date }}
-            </p>
-            <div class="action-row">
-              <button class="btn-primary" @click="handleAddToCart(activeItem!)">加入购物车</button>
-              <button 
-                class="btn-outline" 
-                @click="openChat(activeItem!)"
-                :disabled="!canContactSeller"
-              >
-                {{ canContactSeller ? '联系卖家' : '暂无法联系卖家' }}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div class="reviews-section">
-          <h3>商品评价</h3>
-          <div class="review-form" v-if="user">
-            <div class="rating-row">
-              <span>评分：</span>
-              <select v-model="reviewForm.rating">
-                <option :value="5">5 - 非常满意</option>
-                <option :value="4">4 - 满意</option>
-                <option :value="3">3 - 一般</option>
-                <option :value="2">2 - 不满意</option>
-                <option :value="1">1 - 很差</option>
-              </select>
-            </div>
-            <textarea
-              v-model="reviewForm.comment"
-              placeholder="写下你的评价..."
-              class="review-textarea"
-            ></textarea>
-            <button
-              class="btn-primary"
-              @click="handleSubmitReview"
-              :disabled="reviewLoading"
-            >
-              {{ reviewLoading ? '提交中...' : '提交评价' }}
-            </button>
-          </div>
-          <div v-else class="login-tip">登录后可评价</div>
-
-          <div class="review-list">
-            <div v-for="r in itemReviews" :key="r.id" class="review-item">
-              <div class="review-header">
-                <span class="review-user">{{ r.username }}</span>
-                <span class="review-rating">{{ '★'.repeat(r.rating) }}</span>
-                <span class="review-date">{{ r.date }}</span>
-              </div>
-              <p class="review-comment">{{ r.comment }}</p>
-            </div>
-            <div v-if="itemReviews.length === 0" class="empty-reviews">暂无评价</div>
-          </div>
-        </div>
-      </div>
-    </div>
 
     <div v-if="showAddForm" class="modal-overlay" @click.self="showAddForm = false">
       <div class="modal">
@@ -963,11 +979,11 @@ onMounted(() => {
       </div>
     </div>
 
-    <div v-if="showChat" class="modal-overlay" @click.self="showChat = false">
+    <div v-if="showChat" class="modal-overlay" @click.self="closeChat">
       <div class="modal modal-large">
-        <button class="close" @click="showChat = false">关闭</button>
+        <button class="close" @click="closeChat">关闭</button>
         <div class="chat-header">
-          <button class="btn-back" @click="showChat = false; showSellerMessages = true;">← 返回</button>
+          <button class="btn-back" @click="closeChat(); showSellerMessages = true;">← 返回</button>
           <div class="chat-header-info">
             <h2>{{ currentConversation?.itemTitle || '聊天' }}</h2>
             <span class="chat-product-label">{{ isAdmin ? '系统通知' : '商品咨询' }}</span>
@@ -1042,19 +1058,27 @@ onMounted(() => {
         <div v-if="ordersLoading" class="loading">加载中...</div>
         <div v-else-if="orders.length === 0" class="empty">暂无订单</div>
         <div v-else class="order-list">
-          <div v-for="o in orders" :key="o.orderId" class="order-item">
+          <div v-for="o in orders" :key="o.orderId" class="order-item" @click="goToOrderDetail(o)">
             <div class="order-header">
               <span class="order-id">订单号：{{ o.orderId }}</span>
-              <span class="order-status" :class="o.status">{{ o.status }}</span>
+              <span class="order-status" :class="o.status">{{ getStatusText(o.status) }}</span>
             </div>
             <div class="order-items">
               <div v-for="item in o.items" :key="item.id" class="order-product">
                 {{ item.title }} × {{ item.quantity }}
               </div>
             </div>
+            <div v-if="o.trackingNumber" class="tracking-info">
+              <span>物流单号：{{ o.trackingNumber }}</span>
+            </div>
             <div class="order-footer">
               <span class="order-total">总计：¥{{ o.totalAmount }}</span>
               <span class="order-date">{{ o.date }}</span>
+            </div>
+            <div class="order-actions" @click.stop>
+              <button v-if="o.status === 'shipped'" class="btn-confirm" @click="handleConfirmOrder(o)">
+                确认收货
+              </button>
             </div>
           </div>
         </div>
@@ -1089,10 +1113,59 @@ onMounted(() => {
                 下架
               </button>
             </div>
+            <!-- 订单列表 -->
+            <div v-if="item.orders && item.orders.length > 0" class="listing-orders">
+              <h4>待发货订单 ({{ item.orders.length }})</h4>
+              <div v-for="order in item.orders" :key="order.orderId" class="order-item-mini">
+                <span class="order-info">订单号: {{ order.orderId }}</span>
+                <span class="order-price">¥{{ order.totalAmount }}</span>
+                <button class="btn-ship" @click="handleShipOrderFromListing(order, item)">
+                  发货
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
     </div>
+
+    <!-- 售卖信息弹窗 -->
+    <div v-if="showSalesInfo" class="modal-overlay" @click.self="showSalesInfo = false">
+      <div class="modal modal-large">
+        <button class="close" @click="showSalesInfo = false">关闭</button>
+        <h2>📋 售卖信息</h2>
+        <div v-if="salesOrdersLoading" class="loading">加载中...</div>
+        <div v-else-if="salesOrders.length === 0" class="empty">暂无售卖订单</div>
+        <div v-else class="sales-orders-list">
+          <div v-for="order in salesOrders" :key="order.orderId" class="sales-order-item">
+            <div class="order-header">
+              <span class="order-id">订单号：{{ order.orderId }}</span>
+              <span class="order-status" :class="'status-' + order.status">
+                {{ getStatusText(order.status) }}
+              </span>
+            </div>
+            <div class="order-info">
+              <div class="info-row">
+                <span class="info-label">下单时间</span>
+                <span class="info-value">{{ order.date }}</span>
+              </div>
+              <div v-if="order.trackingNumber" class="info-row">
+                <span class="info-label">物流单号</span>
+                <span class="info-value">{{ order.trackingNumber }}</span>
+              </div>
+              <div class="info-row total">
+                <span class="info-label">订单金额</span>
+                <span class="info-value">¥{{ order.totalAmount }}</span>
+              </div>
+            </div>
+            <div class="order-actions" v-if="order.status === 'paid'">
+              <button class="btn-ship" @click="handleShipOrder(order)">发货</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </main>
 </template>
 
@@ -1340,10 +1413,19 @@ onMounted(() => {
   overflow: hidden;
 }
 
+.card-image {
+  width: 100%;
+  height: 180px;
+  overflow: hidden;
+  border-radius: 12px;
+  background: #f3f4f6;
+}
+
 .card-image img {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
   transition: transform 0.35s ease;
 }
 
@@ -1631,12 +1713,14 @@ onMounted(() => {
   background: linear-gradient(135deg, #f8fafc, #f1f5f9);
   padding: 16px;
   border-radius: 16px;
+  height: 320px;
 }
 
 .modal-thumb img {
-  max-width: 100%;
-  max-height: 320px;
-  object-fit: contain;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
 }
 
 .modal-info {
@@ -2206,6 +2290,14 @@ onMounted(() => {
   background: #f8fafc;
   border-radius: 16px;
   border: 1px solid #e2e8f0;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.order-item:hover {
+  border-color: #7c3aed;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.15);
 }
 
 .order-header {
@@ -2227,14 +2319,29 @@ onMounted(() => {
   font-weight: 500;
 }
 
+.order-status.pending {
+  background: #fef3c7;
+  color: #d97706;
+}
+
 .order-status.paid {
   background: #dcfce7;
   color: #16a34a;
 }
 
-.order-status.pending_payment {
-  background: #fef3c7;
-  color: #d97706;
+.order-status.shipped {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+.order-status.delivered {
+  background: #e0e7ff;
+  color: #6366f1;
+}
+
+.order-status.completed {
+  background: #dcfce7;
+  color: #16a34a;
 }
 
 .order-status.cancelled {
@@ -2250,6 +2357,15 @@ onMounted(() => {
 .order-product {
   padding: 6px 0;
   color: #64748b;
+}
+
+.tracking-info {
+  padding: 12px;
+  background: #f0f9ff;
+  border-radius: 10px;
+  margin: 12px 0;
+  color: #0369a1;
+  font-size: 14px;
 }
 
 .order-footer {
@@ -2268,6 +2384,46 @@ onMounted(() => {
 .order-date {
   color: #94a3b8;
   font-size: 13px;
+}
+
+.order-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.btn-ship,
+.btn-confirm {
+  flex: 1;
+  padding: 12px 20px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: all 0.25s ease;
+}
+
+.btn-ship {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+}
+
+.btn-ship:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+
+.btn-confirm {
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  color: white;
+}
+
+.btn-confirm:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(34, 197, 94, 0.4);
 }
 
 /* 图片上传样式 */
@@ -2313,6 +2469,14 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   position: relative;
+}
+
+.listing-image {
+  width: 100%;
+  height: 120px;
+  overflow: hidden;
+  border-radius: 12px;
+  background: #f3f4f6;
 }
 
 .listing-image img {
@@ -2364,6 +2528,45 @@ onMounted(() => {
 .listing-actions {
   padding: 12px 16px;
   border-top: 1px solid #e2e8f0;
+}
+
+.listing-orders {
+  padding: 16px;
+  background: #f8fafc;
+  border-top: 1px solid #e2e8f0;
+}
+
+.listing-orders h4 {
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.order-item-mini {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: white;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.order-item-mini:last-child {
+  margin-bottom: 0;
+}
+
+.order-info {
+  font-size: 13px;
+  color: #64748b;
+}
+
+.order-price {
+  font-size: 14px;
+  font-weight: 600;
+  color: #dc2626;
 }
 
 .btn-offline {

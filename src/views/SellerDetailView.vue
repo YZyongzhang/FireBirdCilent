@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { getSellerById, getItems, getConversation, sendMessage, type Item, type Message } from '@/utils/secondhand'
+import { getSellerById, getItems, getConversation, sendMessage, getOrdersBySeller, shipOrder, type Item, type Message, type Order } from '@/utils/secondhand'
 import { getUser } from '@/utils/auth'
 import type { User } from '@/utils/user'
 
@@ -11,8 +11,10 @@ const user = getUser()
 
 const seller = ref<User | null>(null)
 const items = ref<Item[]>([])
+const orders = ref<Order[]>([])
 const loading = ref(false)
 const sellerLoading = ref(false)
+const ordersLoading = ref(false)
 const error = ref('')
 
 // 聊天相关
@@ -20,6 +22,9 @@ const showChat = ref(false)
 const chatMessages = ref<Message[]>([])
 const chatLoading = ref(false)
 const newMessage = ref('')
+
+// 弹窗相关
+const showOrdersModal = ref(false)
 
 onMounted(() => {
   if (user?.role !== 'admin') {
@@ -30,6 +35,7 @@ onMounted(() => {
   if (sellerId) {
     fetchSeller(Number(sellerId))
     fetchSellerItems(Number(sellerId))
+    fetchSellerOrders(Number(sellerId))
   }
 })
 
@@ -62,6 +68,18 @@ async function fetchSellerItems(sellerId: number) {
   }
 }
 
+async function fetchSellerOrders(sellerId: number) {
+  ordersLoading.value = true
+  try {
+    const res = await getOrdersBySeller(sellerId)
+    orders.value = res.orders || []
+  } catch (e) {
+    orders.value = []
+  } finally {
+    ordersLoading.value = false
+  }
+}
+
 function goBack() {
   router.push('/admin/sellers')
 }
@@ -71,10 +89,28 @@ function goToSecondhand() {
 }
 
 function viewItemDetail(item: Item) {
-  router.push({
-    path: '/secondhand',
-    query: { itemId: String(item.id) }
-  })
+  router.push('/secondhand/item/' + item.id)
+}
+
+function openOrdersModal() {
+  showOrdersModal.value = true
+}
+
+function closeOrdersModal() {
+  showOrdersModal.value = false
+}
+
+async function handleShipOrder(order: Order) {
+  const trackingNumber = prompt('请输入物流单号：')
+  if (!trackingNumber) return
+  
+  try {
+    await shipOrder(order.orderId, trackingNumber)
+    order.status = 'shipped'
+    order.trackingNumber = trackingNumber
+  } catch (e) {
+    console.error('发货失败:', e)
+  }
 }
 
 async function contactSeller() {
@@ -88,7 +124,8 @@ async function fetchChatHistory() {
   if (!seller.value) return
   chatLoading.value = true
   try {
-    const res = await getConversation(seller.value.id, 'admin')
+    const conversationId = `admin_${seller.value.id}`
+    const res = await getConversation(seller.value.id, conversationId)
     if (res.messages) {
       chatMessages.value = res.messages
     }
@@ -106,10 +143,11 @@ async function sendChatMessage() {
   newMessage.value = ''
   
   try {
+    const conversationId = `admin_${seller.value.id}`
     const res = await sendMessage({
       toUserId: seller.value.id,
       content,
-      itemId: 'admin',
+      itemId: conversationId,
       itemTitle: '系统消息'
     })
     if (res.status === 'ok') {
@@ -129,6 +167,22 @@ async function sendChatMessage() {
 
 function closeChat() {
   showChat.value = false
+}
+
+function getStatusText(status: string): string {
+  const statusMap: Record<string, string> = {
+    pending: '待付款',
+    paid: '待发货',
+    shipped: '已发货',
+    delivered: '待确认',
+    completed: '已完成',
+    cancelled: '已取消'
+  }
+  return statusMap[status] || status
+}
+
+function getStatusClass(status: string): string {
+  return `status-${status}`
 }
 </script>
 
@@ -192,6 +246,28 @@ function closeChat() {
           </div>
         </div>
 
+        <!-- 售卖信息模块 -->
+        <div class="orders-section" @click="openOrdersModal">
+          <div class="section-header">
+            <h3>📋 售卖信息</h3>
+            <span class="orders-count">{{ orders.length }} 笔订单</span>
+          </div>
+          <div class="orders-summary">
+            <div class="summary-item">
+              <span class="summary-label">待发货</span>
+              <span class="summary-value pending">{{ orders.filter(o => o.status === 'paid').length }}</span>
+            </div>
+            <div class="summary-item">
+              <span class="summary-label">已发货</span>
+              <span class="summary-value shipped">{{ orders.filter(o => o.status === 'shipped').length }}</span>
+            </div>
+            <div class="summary-item">
+              <span class="summary-label">已完成</span>
+              <span class="summary-value completed">{{ orders.filter(o => o.status === 'completed').length }}</span>
+            </div>
+          </div>
+        </div>
+
         <div class="products-section">
           <div class="section-header">
             <h3>在售商品</h3>
@@ -225,6 +301,43 @@ function closeChat() {
           </div>
         </div>
       </template>
+
+      <!-- 订单弹窗 -->
+      <div v-if="showOrdersModal" class="modal-overlay" @click.self="closeOrdersModal">
+        <div class="modal modal-large">
+          <button class="close" @click="closeOrdersModal">关闭</button>
+          <h2>商家售卖订单</h2>
+          <div v-if="ordersLoading" class="loading">加载中...</div>
+          <div v-else-if="orders.length === 0" class="empty">暂无订单</div>
+          <div v-else class="orders-list">
+            <div v-for="order in orders" :key="order.orderId" class="order-item">
+              <div class="order-header">
+                <span class="order-id">订单号：{{ order.orderId }}</span>
+                <span class="order-status" :class="getStatusClass(order.status)">
+                  {{ getStatusText(order.status) }}
+                </span>
+              </div>
+              <div class="order-info">
+                <div class="info-row">
+                  <span class="info-label">下单时间</span>
+                  <span class="info-value">{{ order.date }}</span>
+                </div>
+                <div v-if="order.trackingNumber" class="info-row">
+                  <span class="info-label">物流单号</span>
+                  <span class="info-value">{{ order.trackingNumber }}</span>
+                </div>
+                <div class="info-row total">
+                  <span class="info-label">订单金额</span>
+                  <span class="info-value">¥{{ order.totalAmount }}</span>
+                </div>
+              </div>
+              <div class="order-actions" v-if="order.status === 'paid'">
+                <button class="btn-ship" @click.stop="handleShipOrder(order)">发货</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <!-- 聊天窗口 -->
       <div v-if="showChat" class="chat-overlay" @click.self="closeChat">
@@ -496,7 +609,261 @@ function closeChat() {
   box-shadow: 0 8px 32px rgba(76, 29, 149, 0.15);
 }
 
-.section-header {
+/* 售卖信息模块样式 */
+.orders-section {
+  background: rgba(255, 255, 255, 0.98);
+  border-radius: 20px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 8px 32px rgba(76, 29, 149, 0.15);
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.orders-section:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 40px rgba(76, 29, 149, 0.2);
+}
+
+.orders-section .section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #f1f5f9;
+}
+
+.orders-section h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.orders-count {
+  color: #64748b;
+  font-size: 14px;
+}
+
+.orders-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.summary-item {
+  text-align: center;
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 12px;
+}
+
+.summary-label {
+  display: block;
+  font-size: 13px;
+  color: #64748b;
+  margin-bottom: 8px;
+}
+
+.summary-value {
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.summary-value.pending {
+  color: #d97706;
+}
+
+.summary-value.shipped {
+  color: #3b82f6;
+}
+
+.summary-value.completed {
+  color: #16a34a;
+}
+
+/* 订单弹窗样式 */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  background: white;
+  border-radius: 20px;
+  overflow: hidden;
+  max-width: 600px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.modal-large {
+  max-width: 800px;
+}
+
+.modal .close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 32px;
+  height: 32px;
+  background: #f1f5f9;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 16px;
+  color: #64748b;
+}
+
+.modal h2 {
+  margin: 0;
+  padding: 24px;
+  padding-right: 50px;
+  font-size: 20px;
+  font-weight: 700;
+  color: #1e293b;
+  border-bottom: 2px solid #f1f5f9;
+  position: relative;
+}
+
+.modal .loading,
+.modal .empty {
+  padding: 40px;
+  text-align: center;
+  color: #94a3b8;
+}
+
+.orders-list {
+  padding: 16px;
+}
+
+.order-item {
+  background: #f8fafc;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.order-item:last-child {
+  margin-bottom: 0;
+}
+
+.order-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.order-id {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.order-status {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.order-status.pending {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.order-status.paid {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+.order-status.shipped {
+  background: #e0e7ff;
+  color: #4f46e5;
+}
+
+.order-status.delivered {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.order-status.completed {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.order-status.cancelled {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.order-info {
+  margin-bottom: 12px;
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+}
+
+.info-label {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.info-value {
+  color: #1e293b;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.info-row.total {
+  padding-top: 12px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.info-row.total .info-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: #7c3aed;
+}
+
+.order-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.btn-ship {
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.btn-ship:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+
+/* 聊天窗口样式 */
+.chat-overlay {
   display: flex;
   align-items: center;
   justify-content: space-between;

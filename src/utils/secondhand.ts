@@ -28,6 +28,7 @@ export type Item = {
   date?: string
   category?: string
   status?: string
+  orders?: Order[]  // 添加订单列表
 }
 
 export type RawItem = {
@@ -35,20 +36,37 @@ export type RawItem = {
   title: string
   price: number
   thumb?: string
-  images?: string[]
+  images?: string  // 后端返回的是逗号分隔的字符串
   description?: string
   sellerId?: string | number
   sellerName?: string
   date?: string
   category?: string
+  status?: string
 }
 
 function adaptItem(raw: RawItem): Item {
+  // 将逗号分隔的字符串转为数组
+  const imagesArray = raw.images 
+    ? raw.images.split(',').map(img => {
+        const trimmed = img.trim()
+        return trimmed.startsWith('http') ? trimmed : `${API_BASE}${trimmed}`
+      }).filter(Boolean)
+    : undefined
+  
+  // 处理图片路径
+  const thumb = raw.thumb ? (raw.thumb.startsWith('http') ? raw.thumb : `${API_BASE}${raw.thumb}`) : undefined
+  
   return {
     ...raw,
-    seller: raw.sellerId !== undefined
-      ? { id: raw.sellerId, name: raw.sellerName || '' }
+    thumb,
+    images: imagesArray,
+    status: raw.status || 'available',
+    seller: raw.sellerId !== undefined && raw.sellerId !== null && raw.sellerId !== 0
+      ? { id: raw.sellerId, name: raw.sellerName || '未知卖家' }
       : undefined,
+    sellerId: raw.sellerId,
+    sellerName: raw.sellerName || '未知卖家',
   }
 }
 
@@ -104,8 +122,13 @@ export type Order = {
   orderId: string | number
   items: CartItem[]
   totalAmount: number
-  status: string
+  status: 'pending' | 'paid' | 'shipped' | 'delivered' | 'completed' | 'cancelled'
   date: string
+  payTime?: string
+  shipTime?: string
+  deliverTime?: string
+  shippingAddress?: string
+  trackingNumber?: string
 }
 
 export interface ItemsResponse {
@@ -170,10 +193,21 @@ export async function getItems(params: {
 }
 
 export async function getItemDetail(id: string | number): Promise<Item> {
-  const { data } = await axios.get<RawItem>(`${BASE}/items/${id}`, {
-    headers: getHeaders(),
-  })
-  return adaptItem(data)
+  console.log('[DEBUG] getItemDetail called with id:', id)
+  try {
+    const { data } = await axios.get<RawItem>(`${BASE}/items/${id}`, {
+      headers: getHeaders(),
+      timeout: 10000,
+    })
+    console.log('[DEBUG] Raw API response:', JSON.stringify(data, null, 2))
+    const adapted = adaptItem(data)
+    console.log('[DEBUG] Adapted item:', JSON.stringify(adapted, null, 2))
+    return adapted
+  } catch (error: any) {
+    console.error('[DEBUG] getItemDetail error:', error.message)
+    console.error('[DEBUG] Error response:', error.response?.data)
+    throw error
+  }
 }
 
 export async function createItem(payload: {
@@ -390,6 +424,31 @@ export async function cancelOrder(orderId: string | number): Promise<void> {
   })
 }
 
+export async function getOrdersBySeller(sellerId: string | number): Promise<OrdersResponse> {
+  const { data } = await axios.get(`${BASE}/orders/seller/${sellerId}`, {
+    headers: getHeaders(),
+  })
+  return { orders: data }
+}
+
+export async function shipOrder(orderId: string | number, trackingNumber?: string): Promise<void> {
+  await axios.put(`${BASE}/orders/${orderId}/ship`, { trackingNumber }, {
+    headers: getHeaders(),
+  })
+}
+
+export async function confirmOrder(orderId: string | number): Promise<void> {
+  await axios.put(`${BASE}/orders/${orderId}/confirm`, {}, {
+    headers: getHeaders(),
+  })
+}
+
+export async function applyReturnOrder(orderId: string | number, reason: string): Promise<void> {
+  await axios.put(`${BASE}/orders/${orderId}/return`, { reason }, {
+    headers: getHeaders(),
+  })
+}
+
 export async function getItemReviews(itemId: string | number): Promise<ReviewsResponse> {
   const { data } = await axios.get(`${BASE}/items/${itemId}/reviews`, {
     headers: getHeaders(),
@@ -406,3 +465,6 @@ export async function submitReview(
   })
   return data
 }
+
+export const getItem = getItemDetail
+export const addReview = submitReview
