@@ -298,6 +298,9 @@ export async function getCart(): Promise<CartResponse> {
 export async function addToCart(payload: {
   itemId: string | number
   quantity: number
+  title?: string
+  price?: number
+  thumb?: string
 }): Promise<{ success: boolean; message?: string }> {
   const { data } = await axios.post(`${BASE}/cart`, payload, {
     headers: getHeaders(),

@@ -1,15 +1,71 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getUser } from '../utils/auth'
 import { logout } from '../router'
+import { recharge, getCurrentUser } from '../utils/user'
 
 const router = useRouter()
 
 const user = ref(getUser())
+const userBalance = ref(0)
+
+// 充值相关
+const showRechargeModal = ref(false)
+const rechargeAmount = ref('')
+const rechargeLoading = ref(false)
 
 const handleLogout = () => {
   logout()
+}
+
+async function fetchUserBalance() {
+  try {
+    const res = await getCurrentUser()
+    if (res.data) {
+      userBalance.value = res.data.balance || 0
+    }
+  } catch (e) {
+    console.error('获取用户余额失败:', e)
+  }
+}
+
+onMounted(() => {
+  fetchUserBalance()
+})
+
+async function openRechargeModal() {
+  showRechargeModal.value = true
+}
+
+async function closeRechargeModal() {
+  showRechargeModal.value = false
+  rechargeAmount.value = ''
+}
+
+async function handleRecharge() {
+  const amount = parseFloat(rechargeAmount.value)
+  if (isNaN(amount) || amount <= 0) {
+    alert('请输入有效的充值金额')
+    return
+  }
+  
+  rechargeLoading.value = true
+  try {
+    const res = await recharge(amount)
+    if (res.success) {
+      userBalance.value = res.balance || 0
+      alert(`充值成功！当前余额：${userBalance.value.toFixed(2)}元`)
+      closeRechargeModal()
+    } else {
+      alert(res.message || '充值失败')
+    }
+  } catch (e) {
+    console.error('充值失败:', e)
+    alert('充值失败，请稍后重试')
+  } finally {
+    rechargeLoading.value = false
+  }
 }
 
 const greeting = computed(() => {
@@ -116,6 +172,12 @@ const cards = [
                 {{ user?.role === 'admin' ? '管理员' : user?.role === 'seller' ? '卖家' : '普通用户' }}
               </span>
             </div>
+            <div class="profile-divider"></div>
+            <div class="profile-item balance-item">
+              <span class="profile-label">余额</span>
+              <span class="profile-value balance-value">¥{{ userBalance.toFixed(2) }}</span>
+              <button class="recharge-btn" @click="openRechargeModal">充值</button>
+            </div>
           </div>
         </div>
         <div class="header-decoration">
@@ -164,6 +226,41 @@ const cards = [
         </div>
       </div>
     </section>
+
+    <!-- 充值弹窗 -->
+    <div v-if="showRechargeModal" class="modal-overlay" @click.self="closeRechargeModal">
+      <div class="modal recharge-modal">
+        <button class="close" @click="closeRechargeModal">×</button>
+        <h2>💰 充值</h2>
+        <div class="form-group">
+          <label>充值金额</label>
+          <input 
+            v-model="rechargeAmount" 
+            type="number" 
+            placeholder="请输入充值金额"
+            :disabled="rechargeLoading"
+          />
+        </div>
+        <div class="quick-amounts">
+          <button 
+            v-for="amount in [10, 50, 100, 500]" 
+            :key="amount"
+            class="quick-btn"
+            @click="rechargeAmount = String(amount)"
+            :disabled="rechargeLoading"
+          >
+            ¥{{ amount }}
+          </button>
+        </div>
+        <button 
+          class="submit-btn" 
+          @click="handleRecharge"
+          :disabled="rechargeLoading"
+        >
+          {{ rechargeLoading ? '充值中...' : '确认充值' }}
+        </button>
+      </div>
+    </div>
   </main>
 </template>
 
@@ -458,6 +555,36 @@ const cards = [
   background: #e2e8f0;
 }
 
+.balance-item {
+  position: relative;
+}
+
+.balance-value {
+  color: #22c55e !important;
+  font-size: 18px !important;
+}
+
+.recharge-btn {
+  position: absolute;
+  right: -60px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 4px 12px;
+  border: none;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.recharge-btn:hover {
+  transform: translateY(-50%) scale(1.05);
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4);
+}
+
 .header-decoration {
   position: absolute;
   top: -20px;
@@ -623,7 +750,141 @@ const cards = [
 }
 
 .footer-dots span:nth-child(2) {
-  background: rgba(139, 92, 246, 0.6);
+    background: rgba(139, 92, 246, 0.6);
+  }
+
+/* 弹窗样式 */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  background: #fff;
+  border-radius: 16px;
+  padding: 24px;
+  width: 90%;
+  max-width: 400px;
+  position: relative;
+}
+
+.modal .close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 50%;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.modal .close:hover {
+  background: #e2e8f0;
+}
+
+.modal h2 {
+  margin: 0 0 20px;
+  color: #0f172a;
+  font-size: 24px;
+}
+
+.modal .form-group {
+  margin-bottom: 16px;
+}
+
+.modal .form-group label {
+  display: block;
+  margin-bottom: 8px;
+  color: #334155;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.modal .form-group input {
+  width: 100%;
+  height: 48px;
+  padding: 0 16px;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  font-size: 16px;
+  outline: none;
+  transition: all 0.25s ease;
+  box-sizing: border-box;
+}
+
+.modal .form-group input:focus {
+  border-color: #8b5cf6;
+  box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.1);
+}
+
+.modal .form-group input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.quick-amounts {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.quick-btn {
+  flex: 1;
+  height: 40px;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  color: #334155;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.quick-btn:hover:not(:disabled) {
+  border-color: #8b5cf6;
+  color: #8b5cf6;
+}
+
+.quick-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.modal .submit-btn {
+  width: 100%;
+  height: 48px;
+  border: none;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.modal .submit-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4);
+}
+
+.modal .submit-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 /* 响应式设计 */

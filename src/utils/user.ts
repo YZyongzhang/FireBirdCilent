@@ -1,6 +1,7 @@
 import axios from 'axios'
+import { API_BASE } from '../config'
 
-const BASE = '/api/users'
+const BASE = `${API_BASE}/api/users`
 
 export type UserRole = 'user' | 'seller' | 'admin'
 
@@ -15,6 +16,7 @@ export interface User {
   address?: string
   businessType?: string
   description?: string
+  balance?: number
 }
 
 export interface UserResponse {
@@ -91,6 +93,17 @@ export async function registerUser(data: {
   return res
 }
 
+export async function recharge(amount: number): Promise<{ success: boolean; message?: string; balance?: number }> {
+  const { data } = await axios.post(`${API_BASE}/recharge`, { amount }, {
+    headers: getHeaders(),
+  })
+  return {
+    success: data.status === 'ok',
+    message: data.message,
+    balance: data.data?.balance,
+  }
+}
+
 export default {
   getUsers,
   getUserById,
@@ -98,4 +111,5 @@ export default {
   deleteUser,
   getCurrentUser,
   registerUser,
+  recharge,
 }

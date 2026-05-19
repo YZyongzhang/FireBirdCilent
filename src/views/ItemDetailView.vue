@@ -86,7 +86,13 @@ const showCartSuccess = ref(false)
 async function handleAddToCart() {
   if (!item.value) return
   try {
-    await addToCart({ itemId: String(item.value.id), quantity: 1 })
+    await addToCart({ 
+      itemId: String(item.value.id), 
+      quantity: 1,
+      title: item.value.title,
+      price: item.value.price,
+      thumb: item.value.thumb
+    })
     showCartSuccess.value = true
   } catch (e) {
     console.error('加入购物车失败:', e)
