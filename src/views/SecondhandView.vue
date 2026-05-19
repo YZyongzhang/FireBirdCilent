@@ -3,6 +3,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   getItems,
+  getCategories,
   getCart,
   addToCart,
   updateCartItem,
@@ -135,7 +136,14 @@ console.log('currentUser:', currentUser.value)
 console.log('isSeller:', isSeller.value)
 console.log('isAuthenticated:', isAuthenticated.value)
 
-
+async function fetchCategories() {
+  try {
+    const res = await getCategories()
+    categories.value = ['全部', ...res.categories]
+  } catch (e) {
+    console.error('Failed to fetch categories:', e)
+  }
+}
 
 async function fetchItems() {
   loading.value = true
@@ -676,6 +684,7 @@ watch([search, category], () => {
 })
 
 onMounted(() => {
+  fetchCategories()
   fetchItems()
 })
 </script>
