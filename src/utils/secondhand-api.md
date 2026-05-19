@@ -69,7 +69,66 @@
 ]
 ```
 
-## 3. 商品下架
+## 3. 获取待审核商品列表（管理员）
+
+### 请求
+- **方法**: GET
+- **路径**: `/api/secondhand/items/pending`
+- **Headers**:
+  | 参数 | 必填 | 说明 |
+  |------|------|------|
+  | X-User-Role | 是 | 必须是 admin |
+
+### 响应
+```json
+[
+  {
+    "id": number,
+    "title": string,
+    "description": string,
+    "price": number,
+    "category": string,
+    "thumb": string,
+    "images": string[],
+    "sellerId": number,
+    "sellerName": string,
+    "date": string,
+    "status": "pending_review"
+  }
+]
+```
+
+### 权限说明
+- 仅管理员可以访问
+
+## 4. 审核商品（通过/拒绝）
+
+### 请求
+- **方法**: POST
+- **路径**: `/api/secondhand/items/{id}/review`
+- **Headers**:
+  | 参数 | 必填 | 说明 |
+  |------|------|------|
+  | X-User-Role | 是 | 必须是 admin |
+- **Body**:
+  | 参数 | 类型 | 必填 | 说明 |
+  |------|------|------|------|
+  | action | string | 是 | approve（通过）或 reject（拒绝） |
+
+### 响应
+```json
+{
+  "success": boolean,
+  "message": string
+}
+```
+
+### 权限说明
+- 仅管理员可以审核商品
+- 审核通过后商品状态变为 available
+- 审核拒绝后商品状态变为 rejected
+
+## 5. 商品下架
 
 ### 请求
 - **方法**: PUT
@@ -91,7 +150,7 @@
 ### 权限说明
 - 仅商品发布者或管理员(admin)可以下架商品
 
-## 4. 获取分类列表
+## 6. 获取分类列表
 
 ### 请求
 - **方法**: GET
@@ -100,11 +159,11 @@
 ### 响应
 ```json
 {
-  "categories": string[]
+  "categories": ["灵感", "思考", "模版", "资源"]
 }
 ```
 
-## 5. 创建商品
+## 7. 创建商品
 
 ### 请求
 - **方法**: POST
@@ -122,15 +181,19 @@
 ### 响应
 ```json
 {
-  "id": number,
-  "title": string,
-  "description": string,
-  "price": number,
-  "category": string,
-  "date": string,
-  "thumb": "http://localhost:80/images/xxx.png",
-  "images": "http://localhost:80/images/xxx.png,http://localhost:80/images/yyy.png",
-  "status": "available"
+  "success": boolean,
+  "message": string,
+  "data": {
+    "id": string,
+    "title": string,
+    "description": string,
+    "price": number,
+    "category": string,
+    "date": string,
+    "thumb": "http://localhost:80/images/xxx.png",
+    "images": "http://localhost:80/images/xxx.png,http://localhost:80/images/yyy.png",
+    "status": "pending_review"
+  }
 }
 ```
 
@@ -139,7 +202,7 @@
 - 返回的 URL 格式为 `http://localhost:80/images/{filename}`
 - 支持多张图片上传，images 字段用逗号分隔
 
-## 6. 获取商品评价
+## 8. 获取商品评价
 
 ### 请求
 - **方法**: GET
@@ -161,7 +224,7 @@
 }
 ```
 
-## 7. 提交评价
+## 9. 提交评价
 
 ### 请求
 - **方法**: POST
@@ -184,7 +247,7 @@
 }
 ```
 
-## 8. 获取购物车
+## 10. 获取购物车
 
 ### 请求
 - **方法**: GET
@@ -206,7 +269,7 @@
 }
 ```
 
-## 9. 添加到购物车
+## 11. 添加到购物车
 
 ### 请求
 - **方法**: POST
@@ -220,11 +283,12 @@
 ### 响应
 ```json
 {
-  "success": boolean
+  "success": boolean,
+  "message": string
 }
 ```
 
-## 10. 更新购物车商品数量
+## 12. 更新购物车商品数量
 
 ### 请求
 - **方法**: PUT
@@ -241,7 +305,7 @@
 }
 ```
 
-## 11. 删除购物车商品
+## 13. 删除购物车商品
 
 ### 请求
 - **方法**: DELETE
@@ -250,11 +314,12 @@
 ### 响应
 ```json
 {
-  "success": boolean
+  "success": boolean,
+  "message": string
 }
 ```
 
-## 12. 清空购物车
+## 14. 清空购物车
 
 ### 请求
 - **方法**: DELETE
@@ -263,27 +328,36 @@
 ### 响应
 ```json
 {
-  "success": boolean
+  "success": boolean,
+  "message": string
 }
 ```
 
-## 13. 创建订单
+## 15. 创建订单
 
 ### 请求
 - **方法**: POST
 - **路径**: `/api/secondhand/orders`
+- **Headers**:
+  | 参数 | 必填 | 说明 |
+  |------|------|------|
+  | X-User-Id | 是 | 用户ID |
+- **Body**:
+  | 参数 | 类型 | 必填 | 说明 |
+  |------|------|------|------|
+  | totalAmount | number | 是 | 订单总金额 |
+  | shippingAddress | string | 是 | 收货地址 |
 
 ### 响应
 ```json
 {
-  "orderId": string | number,
-  "totalAmount": number,
-  "status": string,
-  "date": string
+  "success": boolean,
+  "orderId": string,
+  "message": string
 }
 ```
 
-## 14. 获取订单列表
+## 16. 获取订单列表
 
 ### 请求
 - **方法**: GET
@@ -294,7 +368,7 @@
 {
   "orders": [
     {
-      "orderId": string | number,
+      "orderId": string,
       "items": [
         {
           "id": number,
@@ -304,35 +378,174 @@
         }
       ],
       "totalAmount": number,
-      "status": string,
-      "date": string
+      "status": "pending" | "paid" | "shipped" | "delivered" | "completed" | "cancelled",
+      "date": string,
+      "payTime": string,
+      "shipTime": string,
+      "deliverTime": string,
+      "receiveTime": string,
+      "trackingNumber": string,
+      "shippingAddress": string,
+      "refundStatus": string,
+      "refundTime": string,
+      "refundReason": string
     }
   ]
 }
 ```
 
-## 15. 支付订单
+## 17. 获取卖家订单列表
+
+### 请求
+- **方法**: GET
+- **路径**: `/api/secondhand/orders/seller/{sellerId}`
+
+### 响应
+```json
+[
+  {
+    "orderId": string,
+    "totalAmount": number,
+    "status": "pending" | "paid" | "shipped" | "delivered" | "completed" | "cancelled",
+    "date": string,
+    "payTime": string,
+    "shipTime": string,
+    "trackingNumber": string,
+    "refundStatus": string,
+    "refundReason": string
+  }
+]
+```
+
+## 18. 支付订单
 
 ### 请求
 - **方法**: POST
 - **路径**: `/api/secondhand/orders/{orderId}/pay`
-- **Body**:
-  | 参数 | 类型 | 必填 | 说明 |
-  |------|------|------|------|
-  | method | string | 是 | 支付方式: alipay, wechat, paypal |
+- **Headers**:
+  | 参数 | 必填 | 说明 |
+  |------|------|------|
+  | X-User-Id | 是 | 用户ID |
 
 ### 响应
 ```json
 {
-  "success": boolean
+  "success": boolean,
+  "message": string,
+  "balance": number
 }
 ```
 
-## 16. 获取对话列表
+## 19. 发货
+
+### 请求
+- **方法**: POST
+- **路径**: `/api/secondhand/orders/{orderId}/ship`
+- **Body**:
+  | 参数 | 类型 | 必填 | 说明 |
+  |------|------|------|------|
+  | trackingNumber | string | 是 | 物流单号 |
+
+### 响应
+```json
+{
+  "success": boolean,
+  "message": string
+}
+```
+
+## 20. 确认收货
+
+### 请求
+- **方法**: POST
+- **路径**: `/api/secondhand/orders/{orderId}/confirm`
+- **Headers**:
+  | 参数 | 必填 | 说明 |
+  |------|------|------|
+  | X-User-Id | 是 | 用户ID |
+
+### 响应
+```json
+{
+  "success": boolean,
+  "message": string
+}
+```
+
+## 21. 申请退款
+
+### 请求
+- **方法**: POST
+- **路径**: `/api/secondhand/orders/{orderId}/refund`
+- **Headers**:
+  | 参数 | 必填 | 说明 |
+  |------|------|------|
+  | X-User-Id | 是 | 用户ID |
+- **Body**:
+  | 参数 | 类型 | 必填 | 说明 |
+  |------|------|------|------|
+  | reason | string | 是 | 退款原因 |
+
+### 响应
+```json
+{
+  "success": boolean,
+  "message": string
+}
+```
+
+## 22. 获取待处理退款申请
 
 ### 请求
 - **方法**: GET
-- **路径**: `/api/secondhand/conversations`
+- **路径**: `/api/secondhand/orders/refunds/pending`
+- **Headers**:
+  | 参数 | 必填 | 说明 |
+  |------|------|------|
+  | X-User-Id | 是 | 卖家用户ID |
+
+### 响应
+```json
+[
+  {
+    "orderId": string,
+    "totalAmount": number,
+    "status": string,
+    "date": string,
+    "refundStatus": "pending",
+    "refundTime": string,
+    "refundReason": string
+  }
+]
+```
+
+## 23. 审核退款申请
+
+### 请求
+- **方法**: POST
+- **路径**: `/api/secondhand/orders/{orderId}/refund/review`
+- **Body**:
+  | 参数 | 类型 | 必填 | 说明 |
+  |------|------|------|------|
+  | action | string | 是 | approve（通过）或 reject（拒绝） |
+
+### 响应
+```json
+{
+  "success": boolean,
+  "message": string
+}
+```
+
+### 说明
+- 审核通过后，退款会退回买家账户，订单状态变为 cancelled
+- 审核拒绝后，退款状态变为 rejected
+
+## 24. 获取对话列表
+
+### 请求
+- **方法**: GET
+- **路径**: `/api/secondhand/messages/conversations`
 
 ### 响应
 ```json
@@ -351,11 +564,16 @@
 }
 ```
 
-## 17. 获取对话详情
+## 25. 获取对话详情
 
 ### 请求
 - **方法**: GET
-- **路径**: `/api/secondhand/conversations/{userId}/{itemId}`
+- **路径**: `/api/secondhand/messages/conversation`
+- **参数**:
+  | 参数 | 类型 | 必填 | 说明 |
+  |------|------|------|------|
+  | withUserId | number | 是 | 对方用户ID |
+  | itemId | string | 否 | 商品ID |
 
 ### 响应
 ```json
@@ -363,28 +581,158 @@
   "messages": [
     {
       "id": number,
-      "fromUserId": number | string,
+      "fromUserId": number,
       "fromUsername": string,
+      "toUserId": number,
       "content": string,
-      "date": string
+      "date": string,
+      "itemId": string,
+      "itemTitle": string
     }
   ]
 }
 ```
 
-## 18. 发送消息
+## 26. 发送消息
 
 ### 请求
 - **方法**: POST
-- **路径**: `/api/secondhand/conversations/{userId}/{itemId}`
+- **路径**: `/api/secondhand/messages`
 - **Body**:
   | 参数 | 类型 | 必填 | 说明 |
   |------|------|------|------|
+  | toUserId | number | 是 | 接收消息的用户ID |
   | content | string | 是 | 消息内容 |
+  | itemId | string | 否 | 商品ID |
+  | itemTitle | string | 否 | 商品标题 |
 
 ### 响应
 ```json
 {
-  "success": boolean
+  "success": boolean,
+  "message": {
+    "id": string,
+    "fromUserId": number,
+    "fromUsername": string,
+    "toUserId": number,
+    "content": string,
+    "date": string,
+    "itemId": string,
+    "itemTitle": string
+  }
 }
 ```
+
+## 27. 充值
+
+### 请求
+- **方法**: POST
+- **路径**: `/api/login/recharge`
+- **Headers**:
+  | 参数 | 必填 | 说明 |
+  |------|------|------|
+  | X-User-Id | 是 | 用户ID |
+- **Body**:
+  | 参数 | 类型 | 必填 | 说明 |
+  |------|------|------|------|
+  | amount | number | 是 | 充值金额 |
+
+### 响应
+```json
+{
+  "success": boolean,
+  "message": string,
+  "balance": number
+}
+```
+
+## 28. 获取商家列表
+
+### 请求
+- **方法**: GET
+- **路径**: `/api/users/sellers`
+
+### 响应
+```json
+{
+  "status": string,
+  "data": [
+    {
+      "id": number,
+      "username": string,
+      "phone": string,
+      "businessType": string,
+      "description": string,
+      "status": "pending" | "approved" | "rejected",
+      "balance": number
+    }
+  ]
+}
+```
+
+## 29. 审核商家
+
+### 请求
+- **方法**: POST
+- **路径**: `/api/users/sellers/{id}/review`
+- **Headers**:
+  | 参数 | 必填 | 说明 |
+  |------|------|------|
+  | X-User-Role | 是 | 必须是 admin |
+- **Body**:
+  | 参数 | 类型 | 必填 | 说明 |
+  |------|------|------|------|
+  | action | string | 是 | approve（通过）或 reject（拒绝） |
+
+### 响应
+```json
+{
+  "success": boolean,
+  "message": string
+}
+```
+
+## 30. 注册商家
+
+### 请求
+- **方法**: POST
+- **路径**: `/api/users/register/seller`
+- **Body**:
+  | 参数 | 类型 | 必填 | 说明 |
+  |------|------|------|------|
+  | username | string | 是 | 用户名 |
+  | password | string | 是 | 密码 |
+  | phone | string | 是 | 手机号 |
+  | idCard | string | 是 | 身份证号 |
+  | address | string | 是 | 地址 |
+  | businessType | string | 是 | 经营类型 |
+  | description | string | 否 | 商家描述 |
+
+### 响应
+```json
+{
+  "status": string,
+  "message": string
+}
+```
+
+## 订单状态说明
+
+| 状态 | 说明 |
+|------|------|
+| pending | 待支付 |
+| paid | 已支付 |
+| shipped | 已发货 |
+| delivered | 已收货 |
+| completed | 已完成 |
+| cancelled | 已取消 |
+
+## 退款状态说明
+
+| 状态 | 说明 |
+|------|------|
+| null | 无退款 |
+| pending | 等待审核 |
+| approved | 已通过 |
+| rejected | 已拒绝 |
+| refunded | 已退款 |

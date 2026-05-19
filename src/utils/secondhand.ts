@@ -468,3 +468,45 @@ export async function submitReview(
 
 export const getItem = getItemDetail
 export const addReview = submitReview
+
+export async function getPendingItems(): Promise<Item[]> {
+  const { data } = await axios.get<Item[]>(`${BASE}/items/pending`, {
+    headers: getHeaders(),
+  })
+  return data
+}
+
+export async function reviewItem(id: string | number, action: 'approve' | 'reject'): Promise<{ success: boolean; message: string }> {
+  const { data } = await axios.post<{ success: boolean; message: string }>(`${BASE}/items/${id}/review`, { action }, {
+    headers: getHeaders(),
+  })
+  return data
+}
+
+export async function recharge(amount: number): Promise<{ success: boolean; message: string; balance?: number }> {
+  const { data } = await axios.post(`${API_BASE}/login/recharge`, { amount }, {
+    headers: getHeaders(),
+  })
+  return data
+}
+
+export async function reviewSeller(id: number, action: 'approve' | 'reject'): Promise<{ success: boolean; message: string }> {
+  const { data } = await axios.post(`${API_BASE}/api/users/sellers/${id}/review`, { action }, {
+    headers: getHeaders(),
+  })
+  return data
+}
+
+export async function getPendingRefunds(): Promise<Order[]> {
+  const { data } = await axios.get<Order[]>(`${BASE}/orders/refunds/pending`, {
+    headers: getHeaders(),
+  })
+  return data
+}
+
+export async function reviewRefund(orderId: string | number, action: 'approve' | 'reject'): Promise<{ success: boolean; message: string }> {
+  const { data } = await axios.post(`${BASE}/orders/${orderId}/refund/review`, { action }, {
+    headers: getHeaders(),
+  })
+  return data
+}
