@@ -473,7 +473,13 @@ export async function getItemReviews(itemId: string | number): Promise<ReviewsRe
   const { data } = await axios.get(`${BASE}/items/${itemId}/reviews`, {
     headers: getHeaders(),
   })
-  return data
+  if (Array.isArray(data)) {
+    return { reviews: data }
+  } else if (data && data.reviews !== undefined) {
+    return data
+  } else {
+    return { reviews: [] }
+  }
 }
 
 export async function getReturnRequests(sellerId?: string | number): Promise<OrdersResponse> {
@@ -496,11 +502,11 @@ export async function rejectReturnOrder(orderId: string | number, reason: string
   })
 }
 
-export async function submitReview(
-  itemId: string | number,
-  payload: { rating: number; comment: string }
-): Promise<Review> {
-  const { data } = await axios.post(`${BASE}/items/${itemId}/reviews`, payload, {
+export async function submitReview(itemId: string | number, payload: {
+  rating: number
+  comment: string
+}): Promise<any> {
+  const { data } = await axios.post(`${BASE}/reviews`, { itemId, ...payload }, {
     headers: getHeaders(),
   })
   return data

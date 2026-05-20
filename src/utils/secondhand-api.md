@@ -165,22 +165,24 @@
 
 ### 请求
 - **方法**: POST
-- **路径**: `/api/secondhand/items/{id}/reviews`
+- **路径**: `/api/secondhand/reviews`
+- **Headers**:
+  | 参数 | 必填 | 说明 |
+  |------|------|------|
+  | X-User-Id | 是 | 用户ID |
+  | X-User-Username | 是 | 用户名 |
 - **Body**:
   | 参数 | 类型 | 必填 | 说明 |
   |------|------|------|------|
+  | itemId | string | 是 | 商品ID |
   | rating | number | 是 | 评分(1-5) |
   | comment | string | 是 | 评价内容 |
 
 ### 响应
 ```json
 {
-  "id": number,
-  "userId": number,
-  "username": string,
-  "rating": number,
-  "comment": string,
-  "date": string
+  "success": boolean,
+  "message": string
 }
 ```
 
