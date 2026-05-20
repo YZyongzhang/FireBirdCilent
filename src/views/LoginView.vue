@@ -36,7 +36,7 @@ function generateCharStyles(length: number) {
   const colors = ['#7c3aed', '#a855f7', '#c084fc', '#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#0ea5e9']
   charRotation.value = Array.from({ length }, () => Math.floor(Math.random() * 60) - 30)
   charScale.value = Array.from({ length }, () => 0.8 + Math.random() * 0.4)
-  charColors.value = Array.from({ length }, () => colors[Math.floor(Math.random() * colors.length)])
+  charColors.value = Array.from({ length }, (_, i) => colors[i % colors.length]!)
 }
 
 const loadCaptcha = async () => {

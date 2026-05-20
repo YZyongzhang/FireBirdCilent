@@ -29,6 +29,7 @@ export interface UserResponse {
 
 export interface UsersResponse {
   status: string
+  message?: string
   data?: {
     users: User[]
     total: number
