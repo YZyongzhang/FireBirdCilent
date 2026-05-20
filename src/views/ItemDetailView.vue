@@ -48,8 +48,10 @@ onMounted(async () => {
     
     // 获取评价
     const reviewRes = await getItemReviews(itemId)
+    console.log(itemId)
     console.log('获取评价成功:', reviewRes)
     itemReviews.value = reviewRes.reviews
+
   } catch (e: any) {
     console.error('获取商品详情失败:', e)
     error.value = e.message || e.response?.data?.message || '获取商品详情失败，请稍后重试'
@@ -65,14 +67,17 @@ async function handleSubmitReview() {
   reviewLoading.value = true
   reviewSuccess.value = false
   try {
-    await addReview(Number(item.value.id), {
+    await addReview(item.value.id, {
       rating: reviewForm.value.rating,
       comment: reviewForm.value.comment
     })
     reviewSuccess.value = true
     reviewForm.value = { rating: 5, comment: '' }
     // 刷新评价列表
-    const reviewRes = await getItemReviews(Number(item.value!.id))
+    console.log("刷新评价列表")
+    console.log(item.value!.id)
+    const reviewRes = await getItemReviews(item.value!.id)
+    console.log(item.value!.id)
     itemReviews.value = reviewRes.reviews
   } catch (e) {
     console.error('提交评价失败:', e)

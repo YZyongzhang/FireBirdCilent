@@ -1,0 +1,12 @@
+export async function getItemReviews(itemId: string | number): Promise<ReviewsResponse> {
+  const { data } = await axios.get(`${BASE}/items/${itemId}/reviews`, {
+    headers: getHeaders(),
+  })
+  if (Array.isArray(data)) {
+    return { reviews: data }
+  } else if (data && data.reviews !== undefined) {
+    return data
+  } else {
+    return { reviews: [] }
+  }
+}
