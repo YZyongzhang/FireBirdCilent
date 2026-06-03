@@ -342,7 +342,7 @@ onMounted(() => {
           <h1 v-if="mode === 'register'">创建账号</h1>
           <h1 v-else>欢迎回来</h1>
           <p class="login-description">
-            {{ mode === 'register' ? '开启您的二手交易之旅' : '请选择登录方式' }}
+            {{ mode === 'register' ? '开启您的FireBird之旅' : '请选择登录方式' }}
           </p>
         </div>
 

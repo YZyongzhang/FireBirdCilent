@@ -3,11 +3,6 @@ import HomeView from '@/views/HomeView.vue'
 import LoginView from '@/views/LoginView.vue'
 import ThoughtsView from '@/views/ThoughtsView.vue'
 import DailyPlanView from '@/views/DailyPlanView.vue'
-import SecondhandView from '@/views/SecondhandView.vue'
-import ItemDetailView from '@/views/ItemDetailView.vue'
-import OrderDetailView from '@/views/OrderDetailView.vue'
-import AdminSellersView from '@/views/AdminSellersView.vue'
-import SellerDetailView from '@/views/SellerDetailView.vue'
 import AdminUsersView from '@/views/AdminUsersView.vue'
 import { getUser, clearUser } from '@/utils/auth'
 
@@ -40,42 +35,6 @@ const router = createRouter({
       path: '/daily-plan',
       name: 'daily-plan',
       component: DailyPlanView,
-      meta: { requiresAuth: true },
-    },
-    {
-      path: '/secondhand',
-      name: 'secondhand',
-      component: SecondhandView,
-      meta: { requiresAuth: true },
-    },
-    {
-      path: '/secondhand/item/:itemId',
-      name: 'item-detail',
-      component: ItemDetailView,
-      meta: { requiresAuth: true },
-    },
-    {
-      path: '/secondhand/order/:orderId',
-      name: 'order-detail',
-      component: OrderDetailView,
-      meta: { requiresAuth: true },
-    },
-    {
-      path: '/admin/sellers',
-      name: 'admin-sellers',
-      component: AdminSellersView,
-      meta: { requiresAuth: true },
-    },
-    {
-      path: '/admin/sellers/:sellerId',
-      name: 'seller-detail',
-      component: SellerDetailView,
-      meta: { requiresAuth: true },
-    },
-    {
-      path: '/seller/detail',
-      name: 'my-shop',
-      component: SellerDetailView,
       meta: { requiresAuth: true },
     },
     {

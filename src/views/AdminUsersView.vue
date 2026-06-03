@@ -16,7 +16,7 @@ const actionLoading = ref<{ [key: string]: boolean }>({})
 
 onMounted(() => {
   if (user?.role !== 'admin') {
-    router.push('/secondhand')
+    router.push('/home')
     return
   }
   fetchUsers()
@@ -78,7 +78,7 @@ async function handleUnban(user: User) {
 }
 
 function goBack() {
-  router.push('/secondhand')
+  router.push('/home')
 }
 
 function getRoleBadge(role: string) {
@@ -102,7 +102,7 @@ const currentUsers = computed(() => {
   <div class="admin-users-page">
     <header class="page-header">
       <div class="header-content">
-        <button class="btn-back" @click="goBack">← 返回二手市场</button>
+        <button class="btn-back" @click="goBack">← 返回首页</button>
         <h1 class="page-title">用户管理</h1>
         <div class="header-right">
           <span class="admin-badge">管理员</span>
