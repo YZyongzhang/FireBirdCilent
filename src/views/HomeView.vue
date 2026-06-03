@@ -1,15 +1,20 @@
 <script setup lang="ts">
+<<<<<<< HEAD
 import { ref, computed, onMounted } from 'vue'
+=======
+import { homeCards } from '@/dataset/home'
+import { ref } from 'vue'
+>>>>>>> 8f50c053c8dadb236b06596d8d8c3133847f086c
 import { useRouter } from 'vue-router'
 import { getUser } from '../utils/auth'
 import { logout } from '../router'
 import { recharge, getCurrentUser } from '../utils/user'
 
 const router = useRouter()
-
 const user = ref(getUser())
 const userBalance = ref(0)
 
+<<<<<<< HEAD
 // 充值相关
 const showRechargeModal = ref(false)
 const rechargeAmount = ref('')
@@ -131,6 +136,22 @@ const cards = computed(() => {
   }
 
   return baseCards
+=======
+const cards = homeCards.map((card) => {
+  if (!card.route) {
+    return {
+      ...card,
+      onClick: undefined,
+    }
+  }
+
+  const route = card.route
+
+  return {
+    ...card,
+    onClick: () => router.push(route),
+  }
+>>>>>>> 8f50c053c8dadb236b06596d8d8c3133847f086c
 })
 </script>
 

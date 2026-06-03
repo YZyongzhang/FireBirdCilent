@@ -2,15 +2,19 @@
 ## 1. 不可更改的文件
 无
 ## 2. 注意事项
-1 . 本次更改，仅在src内部更改
+1 . 本次更改，仅在src、claude_history、以及git命令内部更改
 2 . 更改完毕后，请在claude_history 内部进行以日期进行命名，创建markdown文件，写入这一次的更改。
 3 . 自动给我进行git add . , git commit 操作。并给这一次提交命名。
 4 . 大文件自动更新进入.gitinore , 不进行commit
 5 . 所有需要与后端进行交互的接口，都在前端写一个相应的接口文档
 
 ## 更改要求
+<<<<<<< HEAD:prompt.md
 task1：
 task2：
 task3：
 tips:
 
+=======
+帮我完善二手交易平台页面
+>>>>>>> 8f50c053c8dadb236b06596d8d8c3133847f086c:claude_prompt.md

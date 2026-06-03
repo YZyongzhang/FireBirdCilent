@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { defaultThoughtGroups, defaultThoughtNotes } from '@/dataset/thoughts'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
@@ -38,13 +39,13 @@ interface ContextMenuState {
 
 const route = useRoute()
 const router = useRouter()
-const storageKey = 'firebird-thoughts'
 const previewModes = ['split', 'edit', 'preview'] as const
 const loading = ref(false)
 const error = ref('')
 
 const createId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 
+<<<<<<< HEAD
 const defaultGroups: LocalGroup[] = [
   { id: 'group-inbox', name: '灵感收集' },
   { id: 'group-review', name: '复盘记录' },
@@ -62,6 +63,10 @@ const defaultNotes: LocalNote[] = [
 
 const groups = ref<LocalGroup[]>(defaultGroups)
 const notes = ref<LocalNote[]>(defaultNotes)
+=======
+const groups = ref<ThoughtGroup[]>(defaultThoughtGroups.map((group) => ({ ...group })))
+const notes = ref<ThoughtNote[]>(defaultThoughtNotes.map((note) => ({ ...note })))
+>>>>>>> 8f50c053c8dadb236b06596d8d8c3133847f086c
 const previewMode = ref<(typeof previewModes)[number]>('preview')
 const contextMenu = ref<ContextMenuState>({
   visible: false,
@@ -70,6 +75,7 @@ const contextMenu = ref<ContextMenuState>({
   type: 'note-list',
 })
 
+<<<<<<< HEAD
 const loadState = () => {
   const stored = localStorage.getItem(storageKey)
   if (stored) {
@@ -126,6 +132,8 @@ const syncFromServer = async () => {
 
 syncFromServer()
 
+=======
+>>>>>>> 8f50c053c8dadb236b06596d8d8c3133847f086c
 const currentGroupId = computed(() => {
   const routeGroupId = typeof route.params.groupId === 'string' ? route.params.groupId : ''
   return groups.value.some((group) => group.id === routeGroupId) ? routeGroupId : groups.value[0]?.id ?? ''
@@ -163,9 +171,14 @@ const syncRoute = (groupId: string, noteId?: string) => {
 watch(
   [currentGroupId, currentNoteId],
   () => {
+<<<<<<< HEAD
     saveState()
     if (currentGroupId.value) {
       syncRoute(currentGroupId.value, currentNoteId.value || undefined)
+=======
+    if (!currentGroupId.value) {
+      return
+>>>>>>> 8f50c053c8dadb236b06596d8d8c3133847f086c
     }
   },
   { immediate: true },
